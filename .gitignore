@@ -1,0 +1,10 @@
+aidlc-docs/**
+.kiro/**
+.vscode/**
+docs/**
+ARCHITECTURE-SUMMARY.md
+IMPLEMENTATION-GUIDE.md
+PROJECT-SUMMARY.md
+setup-local.sh
+.DS_Store
+.env
