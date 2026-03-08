@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  proxy-engine:
+    build:
+      context: ./proxy-engine
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - ML_SERVICE_URL=http://ml-services:8001
+      - RUST_LOG=info
+    depends_on:
+      - ml-services
+
+  ml-services:
+    build:
+      context: ./ml-services
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  # Future: Add control-plane and web-portal services

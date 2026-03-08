@@ -1,10 +1,41 @@
-aidlc-docs/**
-.kiro/**
-.vscode/**
-docs/**
-ARCHITECTURE-SUMMARY.md
-IMPLEMENTATION-GUIDE.md
-PROJECT-SUMMARY.md
-setup-local.sh
+# Rust
+/proxy-engine/target/
+/proxy-engine/Cargo.lock
+**/*.rs.bk
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
 .env
+.env.local
+
+# Docker
+*.pid
+
+# Docs
+.kiro/**
+docs/**
+*.md
