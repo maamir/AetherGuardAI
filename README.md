@@ -717,7 +717,7 @@ Tests:
 - **[PROJECT_COMPLETE.md](PROJECT_COMPLETE.md)** - Project completion report
 - **[COMPILATION_TEST_REPORT.md](COMPILATION_TEST_REPORT.md)** - Test results
 - **[aws-infrastructure/DEPLOYMENT_GUIDE.md](aws-infrastructure/DEPLOYMENT_GUIDE.md)** - AWS deployment
-- **[docs/requirements.md](docs/requirements.md)** - Academic whitepaper
+- **[docs/requirements.md](Whitepaper/AetherGuard_AI_Whitepaper_v1.pdf)** - Academic whitepaper
 
 ## 💰 Pricing Tiers
 
@@ -819,8 +819,8 @@ Built with:
 
 ## 📞 Support
 
-- **Documentation:** [docs/](docs/)
-- **Issues:** [GitHub Issues](https://github.com/your-org/aetherguard-ai/issues)
+- **Documentation:** [docs/](Whitepaper/)
+- **Issues:** [GitHub Issues](https://github.com/maamir/AetherGuardAI/issues)
 - **Email:** support@aetherguard.ai
 - **Discord:** [Join our community](https://discord.gg/aetherguard)
 
@@ -840,7 +840,5 @@ Built with:
 - [ ] Edge deployment
 - [ ] Mobile SDK
 
----
 
-**Built with ❤️ for secure AI**
 
