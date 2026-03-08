@@ -196,7 +196,7 @@ export class MultiRegionStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'GlobalAcceleratorIPs', {
-      value: JSON.stringify(this.globalAccelerator.ipAddresses),
+      value: JSON.stringify(this.globalAccelerator.ipv4Addresses),
       description: 'Global Accelerator static IP addresses',
     });
 

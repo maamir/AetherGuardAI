@@ -16,6 +16,7 @@ env/
 
 # Node
 web-portal/node_modules
+aws-infrastructure/node_modules
 
 # IDEs
 .vscode/
@@ -44,4 +45,4 @@ docs/**
 *.md
 
 #Files Exclusions
-#!README.md
+!README.md

@@ -156,7 +156,7 @@ export class AetherGuardComputeStack extends cdk.Stack {
         'qldb:PartiQLInsert',
         'qldb:PartiQLSelect',
       ],
-      resources: [props.auditTable.attrArn],
+      resources: [`arn:aws:qldb:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:ledger/${props.auditTable.name}`],
     }));
 
     // Proxy Engine Task Definition
@@ -182,11 +182,7 @@ export class AetherGuardComputeStack extends cdk.Stack {
       environment: {
         RUST_LOG: 'info',
         ML_SERVICE_URL: 'http://localhost:8001',
-      },
-      secrets: {
-        KMS_KEY_ID: ecs.Secret.fromSecretsManager(
-          // TODO: Create secret for KMS key ID
-        ),
+        KMS_KEY_ID: 'placeholder', // Set via environment or secrets manager
       },
       portMappings: [
         {

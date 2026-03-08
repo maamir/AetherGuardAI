@@ -238,7 +238,7 @@ export class ProductionHardeningStack extends cdk.Stack {
     // Add Config Rules
     // Rule: Ensure ECS tasks use encryption
     new config.ManagedRule(this, 'ECSEncryptionRule', {
-      identifier: config.ManagedRuleIdentifiers.ECS_TASK_DEFINITION_USER_FOR_HOST_MODE_CHECK,
+      identifier: config.ManagedRuleIdentifiers.ECS_TASK_DEFINITION_PID_MODE_CHECK,
       description: 'Checks if ECS task definitions are using host network mode',
     });
 

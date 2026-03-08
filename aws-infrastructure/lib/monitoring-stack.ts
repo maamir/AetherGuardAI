@@ -290,30 +290,30 @@ export class AetherGuardMonitoringStack extends cdk.Stack {
     // Create saved queries for common investigations
     new cdk.aws_logs.QueryDefinition(this, 'InjectionAttemptsQuery', {
       queryDefinitionName: 'AetherGuard-InjectionAttempts',
-      queryString: `
-        fields @timestamp, @message
-        | filter @message like /injection_detected/
-        | sort @timestamp desc
-        | limit 100
-      `,
+      queryString: new cdk.aws_logs.QueryString({
+        fields: ['@timestamp', '@message'],
+        filter: '@message like /injection_detected/',
+        sort: '@timestamp desc',
+        limit: 100,
+      }),
     });
 
     new cdk.aws_logs.QueryDefinition(this, 'ErrorsQuery', {
       queryDefinitionName: 'AetherGuard-Errors',
-      queryString: `
-        fields @timestamp, @message
-        | filter @message like /ERROR/
-        | stats count() by bin(5m)
-      `,
+      queryString: new cdk.aws_logs.QueryString({
+        fields: ['@timestamp', '@message'],
+        filter: '@message like /ERROR/',
+        stats: 'count() by bin(5m)',
+      }),
     });
 
     new cdk.aws_logs.QueryDefinition(this, 'LatencyQuery', {
       queryDefinitionName: 'AetherGuard-Latency',
-      queryString: `
-        fields @timestamp, latency_ms
-        | filter latency_ms > 100
-        | stats avg(latency_ms), max(latency_ms), min(latency_ms) by bin(1m)
-      `,
+      queryString: new cdk.aws_logs.QueryString({
+        fields: ['@timestamp', 'latency_ms'],
+        filter: 'latency_ms > 100',
+        stats: 'avg(latency_ms), max(latency_ms), min(latency_ms) by bin(1m)',
+      }),
     });
 
     // Outputs

@@ -241,7 +241,6 @@ export class AetherGuardCdnStack extends cdk.Stack {
       healthCheckPath: '/health',
       healthCheckProtocol: globalaccelerator.HealthCheckProtocol.HTTPS,
       healthCheckPort: 443,
-      thresholdCount: 3,
       trafficDialPercentage: 100,
     });
 

@@ -162,31 +162,6 @@ class InjectionDetector:
             return {'score': 0.0}  # Signal to use heuristic fallback
     
     def _detect_heuristic(self, text: str) -> Dict:
-        """Heuristic detection with 10 categories and weighted scoring"""
-                outputs = self.model(**inputs)
-                logits = outputs.logits
-                probs = torch.softmax(logits, dim=-1)
-                
-                # Get prediction (assuming binary classification)
-                score = probs[0][1].item() if probs.shape[1] > 1 else probs[0][0].item()
-            
-            detected = score > 0.5
-            
-            return {
-                "score": float(score),
-                "detected": detected,
-                "details": {
-                    "method": "llama_guard" if not self.is_fallback else "fallback_model",
-                    "confidence": float(score),
-                    "device": self.device
-                }
-            }
-            
-        except Exception as e:
-            logger.error(f"Model inference error: {e}")
-            return self._detect_heuristic(text)
-    
-    def _detect_heuristic(self, text: str) -> Dict:
         """Enhanced heuristic-based detection with comprehensive patterns"""
         
         # Category 1: Direct instruction override
