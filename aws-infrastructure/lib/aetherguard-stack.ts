@@ -212,7 +212,102 @@ export class AetherGuardStack extends cdk.Stack {
       methodResponses: [{ statusCode: '200' }],
     });
 
-    // ===== API Key for Service-to-Service Communication =====
+    // ===== API Keys and Usage Plans for Multi-Tier Rate Limiting =====
+    
+    // Free tier (10 req/sec, 10K/month)
+    const freeApiKey = this.api.addApiKey('FreeApiKey', {
+      apiKeyName: 'AetherGuard-Free-Key',
+      description: 'API key for free tier',
+    });
+
+    const freePlan = this.api.addUsagePlan('FreePlan', {
+      name: 'AetherGuard-Free',
+      description: 'Free tier: 10 req/sec, 10K requests/month',
+      throttle: {
+        rateLimit: 10,
+        burstLimit: 20,
+      },
+      quota: {
+        limit: 10000,
+        period: apigateway.Period.MONTH,
+      },
+    });
+
+    freePlan.addApiKey(freeApiKey);
+    freePlan.addApiStage({
+      stage: this.api.deploymentStage,
+    });
+
+    // Starter tier (100 req/sec, 1M/month)
+    const starterApiKey = this.api.addApiKey('StarterApiKey', {
+      apiKeyName: 'AetherGuard-Starter-Key',
+      description: 'API key for starter tier',
+    });
+
+    const starterPlan = this.api.addUsagePlan('StarterPlan', {
+      name: 'AetherGuard-Starter',
+      description: 'Starter tier: 100 req/sec, 1M requests/month',
+      throttle: {
+        rateLimit: 100,
+        burstLimit: 200,
+      },
+      quota: {
+        limit: 1000000,
+        period: apigateway.Period.MONTH,
+      },
+    });
+
+    starterPlan.addApiKey(starterApiKey);
+    starterPlan.addApiStage({
+      stage: this.api.deploymentStage,
+    });
+
+    // Professional tier (1000 req/sec, 10M/month)
+    const professionalApiKey = this.api.addApiKey('ProfessionalApiKey', {
+      apiKeyName: 'AetherGuard-Professional-Key',
+      description: 'API key for professional tier',
+    });
+
+    const professionalPlan = this.api.addUsagePlan('ProfessionalPlan', {
+      name: 'AetherGuard-Professional',
+      description: 'Professional tier: 1000 req/sec, 10M requests/month',
+      throttle: {
+        rateLimit: 1000,
+        burstLimit: 2000,
+      },
+      quota: {
+        limit: 10000000,
+        period: apigateway.Period.MONTH,
+      },
+    });
+
+    professionalPlan.addApiKey(professionalApiKey);
+    professionalPlan.addApiStage({
+      stage: this.api.deploymentStage,
+    });
+
+    // Enterprise tier (10000 req/sec, unlimited)
+    const enterpriseApiKey = this.api.addApiKey('EnterpriseApiKey', {
+      apiKeyName: 'AetherGuard-Enterprise-Key',
+      description: 'API key for enterprise tier',
+    });
+
+    const enterprisePlan = this.api.addUsagePlan('EnterprisePlan', {
+      name: 'AetherGuard-Enterprise',
+      description: 'Enterprise tier: 10000 req/sec, unlimited requests',
+      throttle: {
+        rateLimit: 10000,
+        burstLimit: 20000,
+      },
+      // No quota limit for enterprise
+    });
+
+    enterprisePlan.addApiKey(enterpriseApiKey);
+    enterprisePlan.addApiStage({
+      stage: this.api.deploymentStage,
+    });
+
+    // Service-to-service API key (backward compatibility)
     const apiKey = this.api.addApiKey('ServiceApiKey', {
       apiKeyName: 'AetherGuardServiceKey',
       description: 'API key for service-to-service communication',
@@ -246,6 +341,38 @@ export class AetherGuardStack extends cdk.Stack {
       value: this.api.restApiId,
       description: 'API Gateway ID',
       exportName: 'AetherGuardApiId',
+    });
+
+    // API Key outputs
+    new cdk.CfnOutput(this, 'FreeApiKeyId', {
+      value: freeApiKey.keyId,
+      description: 'Free tier API key ID',
+    });
+
+    new cdk.CfnOutput(this, 'StarterApiKeyId', {
+      value: starterApiKey.keyId,
+      description: 'Starter tier API key ID',
+    });
+
+    new cdk.CfnOutput(this, 'ProfessionalApiKeyId', {
+      value: professionalApiKey.keyId,
+      description: 'Professional tier API key ID',
+    });
+
+    new cdk.CfnOutput(this, 'EnterpriseApiKeyId', {
+      value: enterpriseApiKey.keyId,
+      description: 'Enterprise tier API key ID',
+    });
+
+    // Usage plan outputs
+    new cdk.CfnOutput(this, 'RateLimitTiers', {
+      value: JSON.stringify({
+        free: '10 req/sec, 10K/month',
+        starter: '100 req/sec, 1M/month',
+        professional: '1000 req/sec, 10M/month',
+        enterprise: '10000 req/sec, unlimited',
+      }),
+      description: 'Rate limit tiers configuration',
     });
 
     new cdk.CfnOutput(this, 'ApiKeyId', {

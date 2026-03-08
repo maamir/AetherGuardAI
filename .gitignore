@@ -14,6 +14,9 @@ env/
 *.egg-info/
 .pytest_cache/
 
+# Node
+web-portal/node_modules
+
 # IDEs
 .vscode/
 .idea/
@@ -39,3 +42,6 @@ Thumbs.db
 .kiro/**
 docs/**
 *.md
+
+#Files Exclusions
+#!README.md

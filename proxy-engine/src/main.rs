@@ -17,6 +17,7 @@ mod shadow_ai;
 mod policy;
 mod rate_limiter;
 mod gdpr_compliance;
+mod qldb_integration;
 
 use pipeline::RequestPipeline;
 
