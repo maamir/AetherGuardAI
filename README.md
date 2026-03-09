@@ -120,12 +120,26 @@ AetherGuard AI is a zero-trust AI firewall that provides:
   - Tenant isolation at data and compute level
   - Per-tenant policies and models
   - Usage tracking and billing
+  - Complete tenant onboarding flow
 
 - **SSO Integration**
   - SAML 2.0
   - OAuth 2.0 / OIDC
   - Active Directory (LDAP)
   - 5 roles with RBAC (Admin, Operator, Analyst, Viewer, Developer)
+
+- **Web Portal**
+  - Complete authentication (Login/Signup/SSO)
+  - 3-step guided onboarding
+  - Tenant management dashboard
+  - User management with RBAC
+  - API key lifecycle management
+  - Real-time monitoring dashboards
+  - Advanced analytics and reporting
+  - Policy editor with validation
+  - Audit log viewer with chain of custody
+  - Model management interface
+  - Budget tracking and cost projections
 
 - **Custom Model Fine-Tuning**
   - Fine-tuning pipeline
@@ -370,8 +384,11 @@ curl http://localhost:8080/health
 # Check ML services
 curl http://localhost:8001/health
 
-# Check web portal
-open http://localhost:3000
+# Check web portal (install dependencies first)
+cd web-portal
+npm install
+npm run dev
+# Open http://localhost:3000
 ```
 
 ## 📖 Usage Examples
