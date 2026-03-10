@@ -94,8 +94,8 @@ impl AetherSign {
     pub async fn verify_signature(
         &self,
         signature: &str,
-        payload: &str,
-        public_key: Option<&str>,
+        _payload: &str,
+        _public_key: Option<&str>,
     ) -> Result<bool> {
         // Local verification implementation
         // In production: Verify against public key registry
@@ -127,7 +127,7 @@ impl AetherSign {
     }
     
     /// Verify ECDSA signature
-    pub async fn verify_ecdsa(&self, signature: &str, data: &str) -> Result<bool> {
+    pub async fn verify_ecdsa(&self, signature: &str, _data: &str) -> Result<bool> {
         // ECDSA verification
         if signature.starts_with("ECDSA_P256:") {
             tracing::debug!("ECDSA signature verification passed");
@@ -327,6 +327,9 @@ impl ProvenanceTracker {
 
         let valid = broken_links.is_empty() && invalid_signatures.is_empty();
 
+        let broken_links_len = broken_links.len();
+        let invalid_signatures_len = invalid_signatures.len();
+        
         Ok(ChainVerification {
             valid,
             total_events: model_events.len(),
@@ -338,8 +341,8 @@ impl ProvenanceTracker {
             } else {
                 format!(
                     "Chain verification failed: {} broken links, {} invalid signatures",
-                    broken_links.len(),
-                    invalid_signatures.len()
+                    broken_links_len,
+                    invalid_signatures_len
                 )
             },
         })

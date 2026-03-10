@@ -139,9 +139,87 @@ class TenantManager:
         self._load_tenants()
     
     def _load_tenants(self):
-        """Load tenants from storage (mock implementation)"""
-        # In production, load from database
-        # For now, create some demo tenants
+        """Load tenants from database (real implementation)"""
+        try:
+            from .database import get_database
+            
+            db = get_database()
+            tenants_data = db.list_tenants()
+            
+            # Convert database records to Tenant objects
+            for tenant_data in tenants_data:
+                tenant = Tenant(
+                    tenant_id=tenant_data['id'],
+                    name=tenant_data['name'],
+                    tier=TenantTier(tenant_data['tier']),
+                    created_at=datetime.fromisoformat(tenant_data['created_at'].replace('Z', '+00:00')) if tenant_data['created_at'] else datetime.utcnow(),
+                    updated_at=datetime.fromisoformat(tenant_data['updated_at'].replace('Z', '+00:00')) if tenant_data['updated_at'] else datetime.utcnow(),
+                    allowed_models=tenant_data.get('allowed_models', []),
+                    policy_ids=tenant_data.get('policy_ids', []),
+                )
+                self.tenants[tenant.tenant_id] = tenant
+            
+            logger.info(f"Loaded {len(self.tenants)} tenants from database")
+            
+            # If no tenants exist, create demo tenants
+            if not self.tenants:
+                self._create_demo_tenants(db)
+                
+        except ImportError:
+            logger.warning("Database module not available, using demo tenants")
+            self._create_demo_tenants_fallback()
+        except Exception as e:
+            logger.error(f"Failed to load tenants from database: {e}")
+            self._create_demo_tenants_fallback()
+    
+    def _create_demo_tenants(self, db):
+        """Create demo tenants in database"""
+        demo_tenants_data = [
+            {
+                'name': 'Acme Corporation',
+                'tier': 'enterprise',
+                'billing_email': 'billing@acme.com',
+                'allowed_models': ['llama_guard', 'granite_guardian', 'deberta_nli', 'bart_zeroshot'],
+                'policy_ids': ['policy_strict', 'policy_enterprise'],
+            },
+            {
+                'name': 'Startup Inc',
+                'tier': 'professional',
+                'billing_email': 'admin@startup.com',
+                'allowed_models': ['llama_guard', 'granite_guardian'],
+                'policy_ids': ['policy_default'],
+            },
+            {
+                'name': 'Demo User',
+                'tier': 'free',
+                'billing_email': 'demo@example.com',
+                'allowed_models': ['llama_guard'],
+                'policy_ids': ['policy_permissive'],
+            },
+        ]
+        
+        for tenant_data in demo_tenants_data:
+            try:
+                created_tenant = db.create_tenant(tenant_data)
+                
+                tenant = Tenant(
+                    tenant_id=created_tenant['id'],
+                    name=created_tenant['name'],
+                    tier=TenantTier(created_tenant['tier']),
+                    created_at=datetime.fromisoformat(created_tenant['created_at'].replace('Z', '+00:00')),
+                    updated_at=datetime.fromisoformat(created_tenant['updated_at'].replace('Z', '+00:00')),
+                    allowed_models=created_tenant.get('allowed_models', []),
+                    policy_ids=created_tenant.get('policy_ids', []),
+                )
+                
+                self.tenants[tenant.tenant_id] = tenant
+                logger.info(f"Created demo tenant: {tenant.name}")
+                
+            except Exception as e:
+                logger.error(f"Failed to create demo tenant {tenant_data['name']}: {e}")
+    
+    def _create_demo_tenants_fallback(self):
+        """Create demo tenants in memory (fallback)"""
         demo_tenants = [
             Tenant(
                 tenant_id="tenant_acme",
@@ -174,6 +252,8 @@ class TenantManager:
         
         for tenant in demo_tenants:
             self.tenants[tenant.tenant_id] = tenant
+        
+        logger.info(f"Created {len(demo_tenants)} demo tenants in memory")
     
     def get_tenant(self, tenant_id: str) -> Optional[Tenant]:
         """Get tenant by ID"""

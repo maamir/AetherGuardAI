@@ -2,9 +2,10 @@
   "name": "aetherguard-portal",
   "version": "1.0.0",
   "description": "AetherGuard AI - Web Portal for Budget Dashboards and Monitoring",
+  "type": "module",
   "private": true,
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx"

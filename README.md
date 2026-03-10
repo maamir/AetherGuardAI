@@ -1,4 +1,4 @@
-# AetherGuard AI - Enterprise AI Firewall
+# AetherGuard AI - AetherGuard AI: Zero-Trust Firewall for the Generative Era
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
@@ -52,7 +52,7 @@ AetherGuard AI is a zero-trust AI firewall that provides:
   - Shannon entropy scanning
   - Bi-weekly pattern updates
 
-- **DoS Protection**
+- **DDoS Protection**
   - Complexity scoring
   - Token budget enforcement
   - Runaway generation detection

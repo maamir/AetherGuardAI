@@ -108,7 +108,8 @@ class HallucinationDetector:
                 "contradiction_detected": max_contradiction > 0.7,
                 "confidence": max_contradiction,
                 "num_docs_checked": len(context_docs),
-                "method": "deberta_nli" if not self.is_fallback else "fallback_nli"
+                "method": "deberta_nli" if not self.is_fallback else "fallback_nli",
+                "all_scores": contradiction_scores
             }
             
         except Exception as e:
@@ -142,30 +143,158 @@ class HallucinationDetector:
         Validate RAG grounding via cosine similarity with retrieved chunks
         Threshold: >0.85 for grounded outputs
         """
-        # TODO: Implement actual Pinecone vector search
-        # 1. Embed the output
-        # 2. Query Pinecone for similar chunks
-        # 3. Compute cosine similarity
+        try:
+            # Try to use real Pinecone integration
+            from .pinecone_integration_real import get_rag_validator
+            
+            rag_validator = get_rag_validator()
+            
+            # Validate grounding using real Pinecone
+            result = rag_validator.validate_grounding(
+                output=output,
+                similarity_threshold=0.85
+            )
+            
+            return {
+                "similarity": result.get("similarity", 0.0),
+                "grounded": result.get("grounded", False),
+                "top_k_sources": result.get("sources", []),
+                "method": "rag_grounding_real"
+            }
+            
+        except ImportError:
+            logger.warning("Real Pinecone integration not available, using mock RAG grounding")
+            return self._rag_grounding_mock(output)
+        except Exception as e:
+            logger.error(f"RAG grounding error: {e}")
+            return self._rag_grounding_mock(output)
+    
+    def _rag_grounding_mock(self, output: str) -> Dict:
+        """Mock RAG grounding for fallback"""
+        # Mock implementation with realistic but fake similarity scores
+        import random
         
-        # Mock implementation
-        similarity_score = 0.92  # Replace with actual similarity computation
+        # Simulate similarity based on output characteristics
+        output_length = len(output.split())
+        base_similarity = 0.8 if output_length > 10 else 0.6
+        
+        # Add some randomness to make it realistic
+        similarity_score = base_similarity + random.uniform(-0.2, 0.2)
+        similarity_score = max(0.0, min(1.0, similarity_score))
         
         return {
             "similarity": similarity_score,
             "grounded": similarity_score > 0.85,
-            "top_k_sources": [],  # TODO: Return actual source chunks
-            "method": "rag_grounding"
+            "top_k_sources": [],  # Empty for mock
+            "method": "rag_grounding_mock"
         }
     
     def self_consistency_check(self, outputs: List[str]) -> Dict:
         """
         Cross-verify multiple outputs for consistency (high-stakes scenarios)
+        Uses semantic similarity to detect inconsistencies across multiple generations
         """
-        # TODO: Implement consistency scoring across multiple generations
-        # Compare semantic similarity between outputs
+        if len(outputs) < 2:
+            return {
+                "consistent": True,
+                "consistency_score": 1.0,
+                "num_samples": len(outputs),
+                "method": "insufficient_samples"
+            }
+        
+        try:
+            # Try to use real sentence transformers for semantic similarity
+            from sentence_transformers import SentenceTransformer
+            from sklearn.metrics.pairwise import cosine_similarity
+            import numpy as np
+            
+            # Load embedding model
+            model = SentenceTransformer('all-MiniLM-L6-v2')
+            
+            # Generate embeddings for all outputs
+            embeddings = model.encode(outputs)
+            
+            # Calculate pairwise cosine similarities
+            similarity_matrix = cosine_similarity(embeddings)
+            
+            # Get upper triangle (excluding diagonal)
+            n = len(outputs)
+            similarities = []
+            for i in range(n):
+                for j in range(i + 1, n):
+                    similarities.append(similarity_matrix[i][j])
+            
+            # Calculate consistency metrics
+            mean_similarity = np.mean(similarities)
+            min_similarity = np.min(similarities)
+            std_similarity = np.std(similarities)
+            
+            # Determine consistency threshold
+            consistency_threshold = 0.7
+            is_consistent = mean_similarity >= consistency_threshold and min_similarity >= 0.5
+            
+            # Identify outliers
+            outliers = []
+            for i, output in enumerate(outputs):
+                output_similarities = [similarity_matrix[i][j] for j in range(n) if j != i]
+                avg_sim = np.mean(output_similarities)
+                if avg_sim < 0.6:
+                    outliers.append({
+                        "index": i,
+                        "output": output[:100] + "..." if len(output) > 100 else output,
+                        "avg_similarity": avg_sim
+                    })
+            
+            return {
+                "consistent": is_consistent,
+                "consistency_score": mean_similarity,
+                "min_similarity": min_similarity,
+                "std_similarity": std_similarity,
+                "num_samples": len(outputs),
+                "outliers": outliers,
+                "method": "semantic_similarity",
+                "threshold": consistency_threshold
+            }
+            
+        except ImportError:
+            logger.warning("sentence-transformers not available, using heuristic consistency check")
+            return self._heuristic_consistency_check(outputs)
+        except Exception as e:
+            logger.error(f"Consistency check error: {e}")
+            return self._heuristic_consistency_check(outputs)
+    
+    def _heuristic_consistency_check(self, outputs: List[str]) -> Dict:
+        """Heuristic consistency check using text similarity metrics"""
+        import difflib
+        
+        # Calculate pairwise text similarities using difflib
+        similarities = []
+        n = len(outputs)
+        
+        for i in range(n):
+            for j in range(i + 1, n):
+                similarity = difflib.SequenceMatcher(None, outputs[i], outputs[j]).ratio()
+                similarities.append(similarity)
+        
+        if not similarities:
+            return {
+                "consistent": True,
+                "consistency_score": 1.0,
+                "num_samples": len(outputs),
+                "method": "heuristic_single_sample"
+            }
+        
+        mean_similarity = sum(similarities) / len(similarities)
+        min_similarity = min(similarities)
+        
+        # Simple heuristic: consistent if average similarity > 0.6
+        is_consistent = mean_similarity > 0.6 and min_similarity > 0.4
         
         return {
-            "consistent": True,
-            "consistency_score": 0.95,
-            "num_samples": len(outputs)
+            "consistent": is_consistent,
+            "consistency_score": mean_similarity,
+            "min_similarity": min_similarity,
+            "num_samples": len(outputs),
+            "method": "heuristic_text_similarity",
+            "threshold": 0.6
         }

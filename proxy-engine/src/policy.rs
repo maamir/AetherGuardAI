@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -154,7 +154,7 @@ impl PolicyEngine {
             Condition::RegionRestriction { allowed_regions } => {
                 Ok(!allowed_regions.contains(&context.region))
             }
-            Condition::RateLimitExceeded { requests_per_minute } => {
+            Condition::RateLimitExceeded { requests_per_minute: _ } => {
                 // TODO: Implement actual rate limiting check
                 Ok(false)
             }

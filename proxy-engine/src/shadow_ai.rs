@@ -47,7 +47,7 @@ impl ShadowAIDetector {
     }
 
     /// Detect Shadow AI via network traffic analysis (DPI)
-    pub async fn analyze_traffic(&self, endpoint: &str, user_id: &str) -> Result<ShadowAIDetection> {
+    pub async fn analyze_traffic(&self, endpoint: &str, _user_id: &str) -> Result<ShadowAIDetection> {
         // TODO: Implement actual Deep Packet Inspection
         // 1. Correlate outbound API requests with known AI endpoints
         // 2. Check against sanctioned endpoint list

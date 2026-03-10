@@ -1,6 +1,7 @@
 use crate::{CompletionRequest, CompletionResponse};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 #[derive(Debug, Serialize)]
 pub struct SecurityCheckResult {
@@ -40,7 +41,7 @@ impl SecurityEngine {
         }
     }
 
-    /// Stage 3: Input scanning - PII, injection, malicious intent, DoS, adversarial
+    /// Stage 3: Input scanning - PII, injection, malicious intent, DoS, adversarial, secrets
     pub async fn scan_input(&self, req: &mut CompletionRequest) -> Result<()> {
         // Extract prompt content
         let prompt_content = req
@@ -52,6 +53,9 @@ impl SecurityEngine {
 
         // Check for adversarial inputs and normalize
         let normalized_content = self.check_adversarial(&prompt_content).await?;
+        
+        // Check for secrets/credentials
+        self.check_secrets(&normalized_content).await?;
         
         // Check for DoS patterns
         self.check_dos(&normalized_content, req.max_tokens).await?;
@@ -82,15 +86,49 @@ impl SecurityEngine {
     }
 
     async fn check_prompt_injection(&self, prompt: &str) -> Result<f32> {
-        // TODO: Call Llama Guard service
-        // For now, simple heuristic
-        let suspicious_patterns = ["ignore previous", "disregard", "system:", "admin mode"];
-        let score = suspicious_patterns
-            .iter()
-            .filter(|p| prompt.to_lowercase().contains(*p))
-            .count() as f32
-            / suspicious_patterns.len() as f32;
+        // Try to call ML service first
+        match self.call_ml_injection_detector(prompt).await {
+            Ok(score) => Ok(score),
+            Err(e) => {
+                warn!("ML injection detector unavailable ({}), using heuristic", e);
+                // Fallback to heuristic detection
+                let suspicious_patterns = [
+                    "ignore previous", "disregard", "system:", "admin mode", 
+                    "override", "bypass", "jailbreak", "prompt injection",
+                    "forget everything", "new instructions"
+                ];
+                let score = suspicious_patterns
+                    .iter()
+                    .filter(|p| prompt.to_lowercase().contains(*p))
+                    .count() as f32
+                    / suspicious_patterns.len() as f32;
 
+                Ok(score)
+            }
+        }
+    }
+
+    async fn call_ml_injection_detector(&self, prompt: &str) -> Result<f32> {
+        let url = format!("{}/detect/injection", self.ml_service_url);
+        let payload = serde_json::json!({
+            "text": prompt
+        });
+
+        let response = self.http_client
+            .post(&url)
+            .json(&payload)
+            .send()
+            .await
+            .context("Failed to call injection detection service")?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("Injection detection service returned error: {}", response.status());
+        }
+
+        let result: serde_json::Value = response.json().await
+            .context("Failed to parse injection detection response")?;
+
+        let score = result["injection_score"].as_f64().unwrap_or(0.0) as f32;
         Ok(score)
     }
 
@@ -111,15 +149,48 @@ impl SecurityEngine {
     }
 
     async fn check_toxicity(&self, content: &str) -> Result<f32> {
-        // TODO: Call Granite Guardian service
-        // For now, simple keyword check
-        let toxic_words = ["hate", "violence", "explicit"];
-        let score = toxic_words
-            .iter()
-            .filter(|w| content.to_lowercase().contains(*w))
-            .count() as f32
-            / toxic_words.len() as f32;
+        // Try to call ML service first
+        match self.call_ml_toxicity_detector(content).await {
+            Ok(score) => Ok(score),
+            Err(e) => {
+                warn!("ML toxicity detector unavailable ({}), using heuristic", e);
+                // Fallback to keyword-based detection
+                let toxic_words = [
+                    "hate", "violence", "explicit", "abuse", "harassment",
+                    "discrimination", "threat", "offensive", "inappropriate"
+                ];
+                let score = toxic_words
+                    .iter()
+                    .filter(|w| content.to_lowercase().contains(*w))
+                    .count() as f32
+                    / toxic_words.len() as f32;
 
+                Ok(score)
+            }
+        }
+    }
+
+    async fn call_ml_toxicity_detector(&self, content: &str) -> Result<f32> {
+        let url = format!("{}/detect/toxicity", self.ml_service_url);
+        let payload = serde_json::json!({
+            "text": content
+        });
+
+        let response = self.http_client
+            .post(&url)
+            .json(&payload)
+            .send()
+            .await
+            .context("Failed to call toxicity detection service")?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("Toxicity detection service returned error: {}", response.status());
+        }
+
+        let result: serde_json::Value = response.json().await
+            .context("Failed to parse toxicity detection response")?;
+
+        let score = result["toxicity_score"].as_f64().unwrap_or(0.0) as f32;
         Ok(score)
     }
 
@@ -186,5 +257,38 @@ impl SecurityEngine {
 
         // Return normalized text
         Ok(result.normalized_text)
+    }
+    
+    /// Check for secrets and credentials
+    async fn check_secrets(&self, content: &str) -> Result<()> {
+        let url = format!("{}/detect/secrets", self.ml_service_url);
+        
+        let payload = serde_json::json!({
+            "text": content
+        });
+
+        let response = self.http_client
+            .post(&url)
+            .json(&payload)
+            .send()
+            .await
+            .context("Failed to call secrets detection service")?;
+
+        if !response.status().is_success() {
+            tracing::warn!("Secrets detection service returned error, allowing request");
+            return Ok(());
+        }
+
+        let result: serde_json::Value = response.json().await
+            .context("Failed to parse secrets detection response")?;
+
+        let secrets_found = result["secrets_found"].as_bool().unwrap_or(false);
+        
+        if secrets_found {
+            let count = result["count"].as_u64().unwrap_or(0);
+            anyhow::bail!("Secrets/credentials detected in request ({} found). Remove sensitive data before sending.", count);
+        }
+
+        Ok(())
     }
 }

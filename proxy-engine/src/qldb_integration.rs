@@ -122,7 +122,7 @@ impl QLDBClient {
             "INSERT INTO AuditEvents VALUE ?",
         );
         
-        let mut event = serde_json::json!({
+        let event = serde_json::json!({
             "event_type": event_type,
             "timestamp": Utc::now().to_rfc3339(),
             "data": event_data,
@@ -262,8 +262,8 @@ impl QLDBClient {
         &self,
         s3_bucket: &str,
         s3_prefix: &str,
-        start_time: DateTime<Utc>,
-        end_time: DateTime<Utc>,
+        _start_time: DateTime<Utc>,
+        _end_time: DateTime<Utc>,
     ) -> Result<String, String> {
         // In production, use QLDB's ExportJournalToS3 API
         

@@ -35,6 +35,7 @@ Thumbs.db
 # Environment
 .env
 .env.local
+env/**
 
 # Docker
 *.pid

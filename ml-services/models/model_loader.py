@@ -46,16 +46,20 @@ class ModelLoader:
         
         try:
             logger.info(f"Loading {model_name}...")
+            
+
+            
+            
             tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
                 cache_dir=self.cache_dir,
-                trust_remote_code=True
+                trust_remote_code=True,
             )
             
             model = AutoModelForSequenceClassification.from_pretrained(
                 model_name,
                 cache_dir=self.cache_dir,
-                trust_remote_code=True
+                trust_remote_code=True,
             )
             
             model.to(self.device)
@@ -116,7 +120,8 @@ class ModelLoader:
         
         Purpose: Natural Language Inference for hallucination detection
         """
-        model_name = "microsoft/deberta-v3-base-mnli-fever-anli"
+        # Use the correct model name from MoritzLaurer
+        model_name = "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli"
         
         if model_name in self.models:
             logger.info(f"Using cached {model_name}")
@@ -401,6 +406,100 @@ class ModelLoader:
             'cuda_available': torch.cuda.is_available(),
             'cuda_device_count': torch.cuda.device_count() if torch.cuda.is_available() else 0,
         }
+    
+    def is_loaded(self, model_identifier: str) -> bool:
+        """
+        Check if a model is loaded
+        
+        Args:
+            model_identifier: Model identifier (e.g., 'llama_guard', 'granite_guardian', 'deberta_nli', 'zero_shot')
+        
+        Returns:
+            bool: True if model is loaded, False otherwise
+        """
+        # Map friendly names to actual model names
+        model_mapping = {
+            'llama_guard': 'meta-llama/Prompt-Guard-86M',
+            'granite_guardian': 'ibm-granite/granite-guardian-hap-38m',
+            'deberta_nli': 'MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli',
+            'zero_shot': 'facebook/bart-large-mnli'
+        }
+        
+        # Check if it's a friendly name
+        if model_identifier in model_mapping:
+            actual_model_name = model_mapping[model_identifier]
+            return actual_model_name in self.models or actual_model_name in self.pipelines
+        
+        # Check direct model name
+        return model_identifier in self.models or model_identifier in self.pipelines
+    
+    def list_loaded_models(self) -> List[str]:
+        """Get list of all loaded models"""
+        loaded = []
+        
+        # Check each model type
+        model_mapping = {
+            'llama_guard': 'meta-llama/Prompt-Guard-86M',
+            'granite_guardian': 'ibm-granite/granite-guardian-hap-38m',
+            'deberta_nli': 'MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli',
+            'zero_shot': 'facebook/bart-large-mnli'
+        }
+        
+        for friendly_name, actual_name in model_mapping.items():
+            if actual_name in self.models or actual_name in self.pipelines:
+                loaded.append(friendly_name)
+        
+        return loaded
+    
+    def get_model(self, model_identifier: str) -> Dict:
+        """
+        Get a loaded model and tokenizer
+        
+        Args:
+            model_identifier: Model identifier (e.g., 'llama_guard', 'granite_guardian', etc.)
+        
+        Returns:
+            Dict containing model, tokenizer, and metadata
+        """
+        # Map friendly names to actual model names
+        model_mapping = {
+            'llama_guard': 'meta-llama/Prompt-Guard-86M',
+            'granite_guardian': 'ibm-granite/granite-guardian-hap-38m',
+            'deberta_nli': 'MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli',
+            'zero_shot': 'facebook/bart-large-mnli'
+        }
+        
+        # Get actual model name
+        if model_identifier in model_mapping:
+            actual_model_name = model_mapping[model_identifier]
+        else:
+            actual_model_name = model_identifier
+        
+        # Check if model is loaded
+        if actual_model_name in self.models:
+            return {
+                'model': self.models[actual_model_name],
+                'tokenizer': self.tokenizers[actual_model_name],
+                'model_name': actual_model_name,
+                'device': self.device,
+                'fallback': False
+            }
+        elif actual_model_name in self.pipelines:
+            return {
+                'pipeline': self.pipelines[actual_model_name],
+                'model_name': actual_model_name,
+                'device': self.device,
+                'fallback': False
+            }
+        else:
+            # Return fallback info
+            return {
+                'model': None,
+                'tokenizer': None,
+                'model_name': actual_model_name,
+                'device': self.device,
+                'fallback': True
+            }
 
 
 # Global model loader instance
@@ -412,6 +511,57 @@ def get_model_loader() -> ModelLoader:
     if _model_loader is None:
         _model_loader = ModelLoader()
     return _model_loader
+
+def initialize_models() -> Dict:
+    """Initialize all models and return status"""
+    loader = get_model_loader()
+    results = {}
+    
+    try:
+        # Try to load Llama Guard
+        try:
+            loader.load_llama_guard()
+            results['llama_guard'] = 'loaded'
+        except Exception as e:
+            logger.warning(f"Failed to load Llama Guard: {e}")
+            results['llama_guard'] = 'fallback'
+        
+        # Try to load Granite Guardian
+        try:
+            loader.load_granite_guardian()
+            results['granite_guardian'] = 'loaded'
+        except Exception as e:
+            logger.warning(f"Failed to load Granite Guardian: {e}")
+            results['granite_guardian'] = 'fallback'
+        
+        # Try to load DeBERTa NLI
+        try:
+            loader.load_deberta_nli()
+            results['deberta_nli'] = 'loaded'
+        except Exception as e:
+            logger.warning(f"Failed to load DeBERTa NLI: {e}")
+            results['deberta_nli'] = 'fallback'
+        
+        # Try to load Zero-shot classifier
+        try:
+            loader.load_zero_shot_classifier()
+            results['zero_shot'] = 'loaded'
+        except Exception as e:
+            logger.warning(f"Failed to load Zero-shot classifier: {e}")
+            results['zero_shot'] = 'fallback'
+        
+        logger.info(f"Model initialization complete: {results}")
+        return results
+        
+    except Exception as e:
+        logger.error(f"Model initialization failed: {e}")
+        return {
+            'llama_guard': 'fallback',
+            'granite_guardian': 'fallback', 
+            'deberta_nli': 'fallback',
+            'zero_shot': 'fallback',
+            'error': str(e)
+        }
 
 
 # Example usage
