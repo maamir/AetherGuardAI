@@ -292,6 +292,31 @@ aetherguard/
 │   ├── requirements.txt
 │   └── Dockerfile
 │
+├── nodejs-sdk/                # 🆕 Node.js SDK
+│   ├── src/
+│   │   ├── client.ts         # Main AetherGuardClient class
+│   │   ├── types.ts          # TypeScript type definitions
+│   │   ├── utils.ts          # Utility functions
+│   │   └── index.ts          # Main export file
+│   ├── examples/
+│   │   ├── basic-usage.js    # Simple chat completions
+│   │   ├── streaming-chat.js # Real-time streaming
+│   │   ├── security-policies.js # Policy management
+│   │   ├── analytics-monitoring.js # Usage analytics
+│   │   └── advanced-features.js # Advanced SDK features
+│   ├── tests/
+│   │   ├── client.test.ts    # Client functionality tests
+│   │   ├── utils.test.ts     # Utility function tests
+│   │   ├── integration.test.ts # Integration tests
+│   │   └── setup.ts          # Test configuration
+│   ├── dist/                 # Compiled JavaScript output
+│   ├── package.json          # NPM package configuration
+│   ├── tsconfig.json         # TypeScript configuration
+│   ├── jest.config.js        # Test configuration
+│   ├── README.md             # SDK documentation
+│   ├── CHANGELOG.md          # Version history
+│   └── LICENSE               # MIT License
+│
 ├── web-portal/                # React web portal
 │   ├── src/
 │   │   ├── pages/
@@ -309,6 +334,28 @@ aetherguard/
 │   │       └── Layout.tsx
 │   ├── package.json
 │   └── vite.config.ts
+│
+├── admin-portal/              # Admin portal (React)
+│   ├── src/
+│   │   ├── pages/
+│   │   │   ├── Dashboard.tsx
+│   │   │   ├── SystemAnalytics.tsx
+│   │   │   ├── TenantManagement.tsx
+│   │   │   └── AuditLogs.tsx
+│   │   └── services/
+│   │       └── api.ts
+│   ├── package.json
+│   └── vite.config.ts
+│
+├── backend-api/               # Backend API (FastAPI)
+│   ├── routers/
+│   │   ├── api_keys.py       # API key management
+│   │   ├── provider_health.py # Provider health monitoring
+│   │   └── reports.py        # Custom reports
+│   ├── migrations/           # Database migrations
+│   ├── main.py               # FastAPI application
+│   ├── requirements.txt
+│   └── Dockerfile
 │
 ├── aws-infrastructure/        # AWS CDK stacks
 │   ├── lib/
@@ -336,6 +383,11 @@ aetherguard/
 │   ├── audit/audit.py
 │   └── analytics/analytics.py
 │
+├── tests/                     # Integration tests
+│   ├── test_advanced_features.py # Comprehensive test suite
+│   ├── test-backend-api.sh   # Backend API tests
+│   └── add-test-data.py      # Test data generator
+│
 ├── docs/
 │   └── requirements.md        # Academic whitepaper
 │
@@ -352,6 +404,7 @@ aetherguard/
 - **8GB+ RAM** (16GB recommended)
 - **10GB+ disk space** for ML models
 - **GPU** (optional, for faster inference)
+- **Node.js** 16+ (for SDK development)
 
 ### One-Command Setup
 
@@ -371,7 +424,9 @@ This will:
 3. ✅ Download ML models (~3GB, first run only)
 4. ✅ Start Proxy Engine (port 8080)
 5. ✅ Start ML Services (port 8001)
-6. ✅ Start Web Portal (port 3000)
+6. ✅ Start Backend API (port 8081)
+7. ✅ Start Web Portal (port 3000)
+8. ✅ Start Admin Portal (port 3001)
 
 **First run takes 10-15 minutes** for model downloads.
 
@@ -384,12 +439,81 @@ curl http://localhost:8080/health
 # Check ML services
 curl http://localhost:8001/health
 
+# Check backend API
+curl http://localhost:8081/health
+
 # Check web portal (install dependencies first)
 cd web-portal
 npm install
 npm run dev
 # Open http://localhost:3000
+
+# Check admin portal
+cd ../admin-portal
+npm install
+npm run dev
+# Open http://localhost:3001
 ```
+
+### 🆕 Node.js SDK Quick Start
+
+Install the official Node.js SDK:
+
+```bash
+npm install @aetherguard/nodejs-sdk
+```
+
+Basic usage:
+
+```javascript
+const { AetherGuardClient } = require('@aetherguard/nodejs-sdk');
+
+// Initialize the client
+const client = new AetherGuardClient({
+  apiKey: 'your-aetherguard-api-key',
+  baseUrl: 'http://localhost:8080' // or your production URL
+});
+
+// Make a secure chat completion
+async function example() {
+  try {
+    const response = await client.createChatCompletion({
+      model: 'gpt-3.5-turbo',
+      messages: [
+        { role: 'user', content: 'What is artificial intelligence?' }
+      ],
+      max_tokens: 150
+    });
+    
+    console.log(response.choices[0].message.content);
+  } catch (error) {
+    if (error.code === 'CONTENT_BLOCKED') {
+      console.log('Content was blocked by security policy');
+    } else {
+      console.error('Error:', error.message);
+    }
+  }
+}
+
+example();
+```
+
+**SDK Features:**
+- 🛡️ **Built-in Security**: All requests automatically protected
+- 🔌 **OpenAI Compatible**: Drop-in replacement for OpenAI SDK
+- 📊 **Real-time Monitoring**: Usage analytics and security events
+- 🎯 **Policy Management**: Create and manage security policies
+- 🚀 **TypeScript Support**: Full type definitions and IntelliSense
+- 📡 **Streaming Support**: Real-time chat completions
+
+**SDK Examples:**
+- [Basic Usage](nodejs-sdk/examples/basic-usage.js) - Simple chat completions
+- [Streaming Chat](nodejs-sdk/examples/streaming-chat.js) - Real-time responses
+- [Security Policies](nodejs-sdk/examples/security-policies.js) - Policy management
+- [Analytics](nodejs-sdk/examples/analytics-monitoring.js) - Usage monitoring
+- [Advanced Features](nodejs-sdk/examples/advanced-features.js) - All SDK capabilities
+
+**SDK Documentation:** See [nodejs-sdk/README.md](nodejs-sdk/README.md) for complete documentation.
 
 ## 📖 Usage Examples
 
@@ -725,6 +849,7 @@ Tests:
 
 ## 📚 Documentation
 
+- **[nodejs-sdk/README.md](nodejs-sdk/README.md)** - 🆕 **Node.js SDK Documentation**
 - **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Detailed setup instructions
 - **[GETTING_STARTED.md](GETTING_STARTED.md)** - Beginner's guide
 - **[IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md)** - Development guide
@@ -733,8 +858,25 @@ Tests:
 - **[CHAIN_OF_CUSTODY.md](CHAIN_OF_CUSTODY.md)** - Audit trail guide
 - **[PROJECT_COMPLETE.md](PROJECT_COMPLETE.md)** - Project completion report
 - **[COMPILATION_TEST_REPORT.md](COMPILATION_TEST_REPORT.md)** - Test results
+- **[PHASE_6_NODEJS_SDK_COMPLETE.md](PHASE_6_NODEJS_SDK_COMPLETE.md)** - 🆕 **SDK Development Report**
 - **[aws-infrastructure/DEPLOYMENT_GUIDE.md](aws-infrastructure/DEPLOYMENT_GUIDE.md)** - AWS deployment
 - **[Whitepaper/AetherGuard_AI_Whitepaper_v1.pdf](Whitepaper/AetherGuard_AI_Whitepaper_v1.pdf)** - Academic whitepaper
+
+### 🆕 SDK Documentation
+
+The Node.js SDK comes with comprehensive documentation:
+
+- **[SDK README](nodejs-sdk/README.md)** - Complete API reference and usage guide
+- **[SDK Examples](nodejs-sdk/examples/)** - 5 working example applications
+- **[SDK Tests](nodejs-sdk/tests/)** - Unit and integration tests
+- **[SDK Changelog](nodejs-sdk/CHANGELOG.md)** - Version history and updates
+
+**Quick SDK Links:**
+- [Installation & Setup](nodejs-sdk/README.md#installation)
+- [Basic Usage Examples](nodejs-sdk/README.md#quick-start)
+- [Security Features](nodejs-sdk/README.md#security-features)
+- [API Reference](nodejs-sdk/README.md#core-features)
+- [TypeScript Support](nodejs-sdk/README.md#typescript-support)
 
 ## 💰 Pricing Tiers
 
@@ -814,8 +956,52 @@ pip install -r requirements.txt
 cd ../web-portal
 npm install
 
+cd ../admin-portal
+npm install
+
+cd ../backend-api
+pip install -r requirements.txt
+
 cd ../aws-infrastructure
 npm install
+
+# 🆕 Install Node.js SDK dependencies
+cd ../nodejs-sdk
+npm install
+npm run build
+npm test
+```
+
+### 🆕 SDK Development
+
+The Node.js SDK is built with TypeScript and includes:
+
+- **Full TypeScript Support**: Complete type definitions
+- **Comprehensive Testing**: 40+ tests with >90% coverage
+- **Example Applications**: 5 working examples
+- **Production Ready**: Error handling, retry logic, monitoring
+
+**SDK Development Commands:**
+```bash
+cd nodejs-sdk
+
+# Install dependencies
+npm install
+
+# Build TypeScript to JavaScript
+npm run build
+
+# Run tests
+npm test
+
+# Run tests with coverage
+npm test -- --coverage
+
+# Lint code
+npm run lint
+
+# Watch mode for development
+npm run dev
 ```
 
 ## 📄 License
@@ -851,6 +1037,9 @@ Built with:
 - [x] AWS deployment
 - [x] Multi-region support
 - [x] CI/CD pipeline
+- [x] **Node.js SDK** 🆕
+- [ ] Python SDK
+- [ ] Go SDK
 - [ ] Kubernetes support
 - [ ] Custom model marketplace
 - [ ] Federated learning
