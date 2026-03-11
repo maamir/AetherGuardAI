@@ -118,7 +118,7 @@ export interface LLMProvider {
 export interface AetherGuardError {
   code: string;
   message: string;
-  details?: any;
+  details?: unknown;
   request_id?: string;
 }
 
@@ -143,7 +143,7 @@ export interface WebhookEvent {
   id: string;
   type: 'security_violation' | 'usage_limit_exceeded' | 'provider_health_change';
   timestamp: string;
-  data: any;
+  data: Record<string, unknown>;
 }
 
 // Analytics types

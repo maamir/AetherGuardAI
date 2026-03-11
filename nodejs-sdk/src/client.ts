@@ -2,7 +2,7 @@
  * AetherGuard Node.js SDK - Main Client
  */
 
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import axios, { AxiosInstance } from 'axios';
 import WebSocket from 'ws';
 import {
   AetherGuardConfig,
@@ -17,7 +17,8 @@ import {
   AetherGuardError,
   StreamChunk,
   AnalyticsQuery,
-  AnalyticsResponse
+  AnalyticsResponse,
+  WebhookEvent
 } from './types';
 
 export class AetherGuardClient {
@@ -130,15 +131,15 @@ export class AetherGuardClient {
         }
       });
 
-      response.data.on('error', (error: any) => {
+      response.data.on('error', (error: Error) => {
         onError?.({
           code: 'STREAM_ERROR',
           message: error.message
         });
       });
 
-    } catch (error: any) {
-      onError?.(error);
+    } catch (error: unknown) {
+      onError?.(error as AetherGuardError);
     }
   }
 
@@ -224,7 +225,7 @@ export class AetherGuardClient {
 
   // WebSocket connection for real-time events
   connectWebSocket(
-    onEvent: (event: any) => void,
+    onEvent: (event: WebhookEvent) => void,
     onError?: (error: Error) => void,
     onClose?: () => void
   ): WebSocket {

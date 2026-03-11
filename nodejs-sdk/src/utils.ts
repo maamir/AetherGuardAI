@@ -53,8 +53,9 @@ export function createSimpleRequest(
 /**
  * Extract text content from chat completion response
  */
-export function extractResponseText(response: any): string {
-  return response.choices?.[0]?.message?.content || '';
+export function extractResponseText(response: Record<string, unknown>): string {
+  const choices = response.choices as Array<{ message?: { content?: string } }> | undefined;
+  return choices?.[0]?.message?.content || '';
 }
 
 /**
@@ -98,18 +99,22 @@ export function formatDate(date: Date): string {
 /**
  * Parse error response
  */
-export function parseError(error: any): { code: string; message: string; details?: any } {
-  if (error.response?.data) {
-    return {
-      code: error.response.data.code || 'API_ERROR',
-      message: error.response.data.message || 'An API error occurred',
-      details: error.response.data.details
-    };
+export function parseError(error: unknown): { code: string; message: string; details?: unknown } {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const errorObj = error as { response?: { data?: { code?: string; message?: string; details?: unknown } } };
+    if (errorObj.response?.data) {
+      return {
+        code: errorObj.response.data.code || 'API_ERROR',
+        message: errorObj.response.data.message || 'An API error occurred',
+        details: errorObj.response.data.details
+      };
+    }
   }
   
+  const errorObj = error as { message?: string };
   return {
     code: 'NETWORK_ERROR',
-    message: error.message || 'A network error occurred'
+    message: errorObj.message || 'A network error occurred'
   };
 }
 
@@ -121,7 +126,7 @@ export async function retryWithBackoff<T>(
   maxRetries: number = 3,
   baseDelay: number = 1000
 ): Promise<T> {
-  let lastError: any;
+  let lastError: unknown;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -157,10 +162,13 @@ export function sanitizeForLogging(text: string): string {
 /**
  * Check if response indicates a security violation
  */
-export function isSecurityViolation(response: any): boolean {
-  return response.choices?.[0]?.finish_reason === 'content_filter' ||
-         response.error?.code === 'CONTENT_BLOCKED' ||
-         response.error?.code === 'SECURITY_VIOLATION';
+export function isSecurityViolation(response: Record<string, unknown>): boolean {
+  const choices = response.choices as Array<{ finish_reason?: string }> | undefined;
+  const error = response.error as { code?: string } | undefined;
+  
+  return choices?.[0]?.finish_reason === 'content_filter' ||
+         error?.code === 'CONTENT_BLOCKED' ||
+         error?.code === 'SECURITY_VIOLATION';
 }
 
 /**
@@ -185,13 +193,16 @@ export function validateUrl(url: string): boolean {
 /**
  * Deep merge objects
  */
-export function deepMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {
+export function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial<T>): T {
   const result = { ...target };
   
   for (const key in source) {
     if (source[key] !== undefined) {
       if (typeof source[key] === 'object' && source[key] !== null && !Array.isArray(source[key])) {
-        result[key] = deepMerge(result[key] || {} as any, source[key] as any);
+        result[key] = deepMerge(
+          (result[key] || {}) as T[Extract<keyof T, string>] & Record<string, unknown>, 
+          source[key] as Partial<T[Extract<keyof T, string>]>
+        ) as T[Extract<keyof T, string>];
       } else {
         result[key] = source[key] as T[Extract<keyof T, string>];
       }

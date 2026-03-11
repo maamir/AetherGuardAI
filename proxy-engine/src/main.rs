@@ -19,6 +19,8 @@ mod policy;
 mod rate_limiter;
 mod gdpr_compliance;
 mod qldb_integration;
+mod request_attribution;
+mod data_residency;
 
 use pipeline::RequestPipeline;
 

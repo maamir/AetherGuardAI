@@ -44,9 +44,14 @@ pub struct DataRetentionRecord {
     pub record_id: String,
     pub user_id: String,
     pub data_type: String,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
+    pub data_classification: String,
     pub region: String,
+    pub consent_given: bool,
+    pub processing_restricted: bool,
+    pub processing_objected: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
     pub can_be_deleted: bool,
 }
 
@@ -154,7 +159,9 @@ impl ComplianceManager {
         record_id: &str,
         user_id: &str,
         data_type: &str,
+        data_classification: &str,
         region: &str,
+        consent_given: bool,
     ) -> Result<()> {
         let created_at = Utc::now();
         let retention_days = self.config.default_retention_days;
@@ -164,16 +171,21 @@ impl ComplianceManager {
             record_id: record_id.to_string(),
             user_id: user_id.to_string(),
             data_type: data_type.to_string(),
-            created_at,
-            expires_at,
+            data_classification: data_classification.to_string(),
             region: region.to_string(),
+            consent_given,
+            processing_restricted: false,
+            processing_objected: false,
+            created_at,
+            updated_at: created_at,
+            expires_at,
             can_be_deleted: true,
         };
 
         let mut retention = self.data_retention.write().await;
         retention.insert(record_id.to_string(), record);
 
-        tracing::debug!("Recorded data retention for: {}", record_id);
+        tracing::debug!("Recorded data retention for: {} (consent: {})", record_id, consent_given);
         Ok(())
     }
 
@@ -213,7 +225,7 @@ impl ComplianceManager {
     ) -> Result<DataSubjectRequest> {
         let request_id = uuid::Uuid::new_v4().to_string();
         
-        let request = DataSubjectRequest {
+        let mut request = DataSubjectRequest {
             request_id: request_id.clone(),
             user_id: user_id.to_string(),
             request_type: request_type.clone(),
@@ -222,14 +234,74 @@ impl ComplianceManager {
             completed_at: None,
         };
 
-        tracing::info!(
-            "Created data subject request: {} for user: {} (type: {:?})",
-            request_id,
-            user_id,
-            request_type
-        );
+        // Process the request based on type
+        match request_type {
+            RequestType::Access => {
+                // Right to access (Article 15)
+                let user_data = self.get_user_data(user_id).await?;
+                request.status = RequestStatus::Completed;
+                request.completed_at = Some(Utc::now());
+                
+                tracing::info!(
+                    "Data access request completed: {} for user: {} ({} records)",
+                    request_id, user_id, user_data.len()
+                );
+            }
+            RequestType::Erasure => {
+                // Right to erasure (Article 17)
+                let deleted_count = self.erase_user_data(user_id).await?;
+                request.status = RequestStatus::Completed;
+                request.completed_at = Some(Utc::now());
+                
+                tracing::info!(
+                    "Data erasure request completed: {} for user: {} ({} records deleted)",
+                    request_id, user_id, deleted_count
+                );
+            }
+            RequestType::Portability => {
+                // Right to data portability (Article 20)
+                let exported_data = self.export_user_data(user_id).await?;
+                request.status = RequestStatus::Completed;
+                request.completed_at = Some(Utc::now());
+                
+                tracing::info!(
+                    "Data portability request completed: {} for user: {} ({} bytes exported)",
+                    request_id, user_id, exported_data.len()
+                );
+            }
+            RequestType::Rectification => {
+                // Right to rectification (Article 16)
+                request.status = RequestStatus::Pending; // Requires manual review
+                
+                tracing::info!(
+                    "Data rectification request created: {} for user: {} (manual review required)",
+                    request_id, user_id
+                );
+            }
+            RequestType::Restriction => {
+                // Right to restriction of processing (Article 18)
+                self.restrict_user_processing(user_id).await?;
+                request.status = RequestStatus::Completed;
+                request.completed_at = Some(Utc::now());
+                
+                tracing::info!(
+                    "Data processing restriction applied: {} for user: {}",
+                    request_id, user_id
+                );
+            }
+            RequestType::Objection => {
+                // Right to object (Article 21)
+                self.record_processing_objection(user_id).await?;
+                request.status = RequestStatus::Completed;
+                request.completed_at = Some(Utc::now());
+                
+                tracing::info!(
+                    "Processing objection recorded: {} for user: {}",
+                    request_id, user_id
+                );
+            }
+        }
 
-        // In production, this would queue the request for processing
         Ok(request)
     }
 
@@ -368,4 +440,216 @@ mod tests {
         let records = manager.get_user_data("user1").await.unwrap();
         assert_eq!(records.len(), 0);
     }
+}
+    /// Restrict processing for a user (Article 18)
+    async fn restrict_user_processing(&self, user_id: &str) -> Result<()> {
+        let mut retention = self.data_retention.write().await;
+        
+        // Mark all user records as processing-restricted
+        for record in retention.values_mut() {
+            if record.user_id == user_id {
+                record.processing_restricted = true;
+                record.updated_at = Utc::now();
+            }
+        }
+        
+        tracing::info!("Processing restriction applied for user: {}", user_id);
+        Ok(())
+    }
+
+    /// Record processing objection (Article 21)
+    async fn record_processing_objection(&self, user_id: &str) -> Result<()> {
+        let mut retention = self.data_retention.write().await;
+        
+        // Mark user as having objected to processing
+        for record in retention.values_mut() {
+            if record.user_id == user_id {
+                record.processing_objected = true;
+                record.updated_at = Utc::now();
+            }
+        }
+        
+        tracing::info!("Processing objection recorded for user: {}", user_id);
+        Ok(())
+    }
+
+    /// Enforce GDPR compliance for request
+    pub async fn enforce_gdpr_compliance(
+        &self,
+        user_id: &str,
+        region: &str,
+        processing_purpose: &str,
+    ) -> Result<ComplianceEnforcement> {
+        let is_gdpr_applicable = self.is_gdpr_applicable(region);
+        
+        if !is_gdpr_applicable {
+            return Ok(ComplianceEnforcement {
+                allowed: true,
+                reason: "GDPR not applicable for region".to_string(),
+                requirements: vec![],
+            });
+        }
+
+        // Check if user has valid consent
+        let has_consent = self.has_consent(user_id, processing_purpose).await;
+        
+        // Check if processing is restricted
+        let is_restricted = self.is_processing_restricted(user_id).await;
+        
+        // Check if user has objected to processing
+        let has_objected = self.has_processing_objection(user_id).await;
+
+        let mut requirements = Vec::new();
+        let mut allowed = true;
+
+        if !has_consent {
+            allowed = false;
+            requirements.push("Valid consent required for data processing".to_string());
+        }
+
+        if is_restricted {
+            allowed = false;
+            requirements.push("Data processing is restricted for this user".to_string());
+        }
+
+        if has_objected {
+            allowed = false;
+            requirements.push("User has objected to data processing".to_string());
+        }
+
+        // Check data retention limits
+        if self.is_data_retention_exceeded(user_id).await {
+            requirements.push("Data retention period exceeded - consider deletion".to_string());
+        }
+
+        let reason = if allowed {
+            "GDPR compliance requirements met".to_string()
+        } else {
+            format!("GDPR compliance violations: {}", requirements.join(", "))
+        };
+
+        Ok(ComplianceEnforcement {
+            allowed,
+            reason,
+            requirements,
+        })
+    }
+
+    /// Check if processing is restricted for user
+    async fn is_processing_restricted(&self, user_id: &str) -> bool {
+        let retention = self.data_retention.read().await;
+        retention.values().any(|record| 
+            record.user_id == user_id && record.processing_restricted
+        )
+    }
+
+    /// Check if user has objected to processing
+    async fn has_processing_objection(&self, user_id: &str) -> bool {
+        let retention = self.data_retention.read().await;
+        retention.values().any(|record| 
+            record.user_id == user_id && record.processing_objected
+        )
+    }
+
+    /// Check if data retention period is exceeded
+    async fn is_data_retention_exceeded(&self, user_id: &str) -> bool {
+        let retention = self.data_retention.read().await;
+        let cutoff = Utc::now() - chrono::Duration::days(self.config.default_retention_days);
+        
+        retention.values().any(|record| 
+            record.user_id == user_id && record.created_at < cutoff
+        )
+    }
+
+    /// Get GDPR compliance report
+    pub async fn get_compliance_report(&self) -> ComplianceReport {
+        let retention = self.data_retention.read().await;
+        let total_records = retention.len();
+        
+        let mut gdpr_applicable = 0;
+        let mut ccpa_applicable = 0;
+        let mut consent_given = 0;
+        let mut processing_restricted = 0;
+        let mut processing_objected = 0;
+        let mut retention_exceeded = 0;
+        
+        let cutoff = Utc::now() - chrono::Duration::days(self.config.default_retention_days);
+        
+        for record in retention.values() {
+            if self.is_gdpr_applicable(&record.region) {
+                gdpr_applicable += 1;
+            }
+            if self.is_ccpa_applicable(&record.region) {
+                ccpa_applicable += 1;
+            }
+            if record.consent_given {
+                consent_given += 1;
+            }
+            if record.processing_restricted {
+                processing_restricted += 1;
+            }
+            if record.processing_objected {
+                processing_objected += 1;
+            }
+            if record.created_at < cutoff {
+                retention_exceeded += 1;
+            }
+        }
+
+        ComplianceReport {
+            total_records,
+            gdpr_applicable,
+            ccpa_applicable,
+            consent_given,
+            processing_restricted,
+            processing_objected,
+            retention_exceeded,
+            compliance_score: self.calculate_compliance_score(
+                total_records,
+                consent_given,
+                processing_restricted,
+                retention_exceeded,
+            ),
+            generated_at: Utc::now(),
+        }
+    }
+
+    /// Calculate overall compliance score (0.0 to 1.0)
+    fn calculate_compliance_score(
+        &self,
+        total: usize,
+        consent_given: usize,
+        processing_restricted: usize,
+        retention_exceeded: usize,
+    ) -> f64 {
+        if total == 0 {
+            return 1.0;
+        }
+
+        let consent_score = consent_given as f64 / total as f64;
+        let restriction_penalty = (processing_restricted as f64 / total as f64) * 0.2;
+        let retention_penalty = (retention_exceeded as f64 / total as f64) * 0.3;
+
+        (consent_score - restriction_penalty - retention_penalty).max(0.0).min(1.0)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ComplianceEnforcement {
+    pub allowed: bool,
+    pub reason: String,
+    pub requirements: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ComplianceReport {
+    pub total_records: usize,
+    pub gdpr_applicable: usize,
+    pub ccpa_applicable: usize,
+    pub consent_given: usize,
+    pub processing_restricted: usize,
+    pub processing_objected: usize,
+    pub retention_exceeded: usize,
+    pub compliance_score: f64,
+    pub generated_at: DateTime<Utc>,
 }
