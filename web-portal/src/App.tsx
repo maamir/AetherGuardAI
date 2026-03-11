@@ -12,6 +12,7 @@ import ModelManagement from './pages/ModelManagement'
 import TenantManagement from './pages/TenantManagement'
 import UserManagement from './pages/UserManagement'
 import ApiKeys from './pages/ApiKeys'
+import LLMProviders from './pages/LLMProviders'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Onboarding from './pages/Onboarding'
@@ -111,6 +112,13 @@ function App() {
         <PrivateRoute>
           <Layout>
             <ApiKeys />
+          </Layout>
+        </PrivateRoute>
+      } />
+      <Route path="/llm-providers" element={
+        <PrivateRoute>
+          <Layout>
+            <LLMProviders />
           </Layout>
         </PrivateRoute>
       } />

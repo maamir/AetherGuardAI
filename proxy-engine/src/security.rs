@@ -66,6 +66,12 @@ impl SecurityEngine {
             anyhow::bail!("Prompt injection detected (score: {:.2})", injection_score);
         }
 
+        // Toxicity check on input prompt
+        let toxicity_score = self.check_toxicity(&normalized_content).await?;
+        if toxicity_score > 0.7 {
+            anyhow::bail!("Harmful content detected in prompt (score: {:.2})", toxicity_score);
+        }
+
         // PII detection and redaction
         self.redact_pii(req).await?;
 
@@ -190,7 +196,7 @@ impl SecurityEngine {
         let result: serde_json::Value = response.json().await
             .context("Failed to parse toxicity detection response")?;
 
-        let score = result["toxicity_score"].as_f64().unwrap_or(0.0) as f32;
+        let score = result["score"].as_f64().unwrap_or(0.0) as f32;
         Ok(score)
     }
 

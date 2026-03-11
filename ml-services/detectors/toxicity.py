@@ -43,39 +43,52 @@ class ToxicityDetector:
     def _detect_with_model(self, text: str) -> Dict:
         """Use actual ML model for detection"""
         try:
-            # Tokenize input
-            inputs = self.tokenizer(
-                text,
-                return_tensors="pt",
-                truncation=True,
-                max_length=512,
-                padding=True
-            ).to(self.device)
-            
-            # Get model prediction
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-                logits = outputs.logits
-                probs = torch.sigmoid(logits)  # Multi-label classification
+            # Use model_loader's prediction method for correct inference
+            if self.model_loader:
+                result = self.model_loader.predict_granite_guardian(text)
                 
-                # Map to categories (adjust based on actual model output)
-                scores = {}
-                if probs.shape[1] >= len(self.categories):
-                    for i, category in enumerate(self.categories):
-                        scores[category] = float(probs[0][i].item())
+                # Granite Guardian returns: {'label': 'SAFE'/'HATE'/'ABUSE'/'PROFANITY', 'score': float, 'categories': dict}
+                label = result.get('label', 'UNKNOWN')
+                confidence = result.get('score', 0.0)
+                categories = result.get('categories', {})
+                
+                # If SAFE, return low scores
+                if label == 'SAFE':
+                    scores = {cat: 0.0 for cat in self.categories}
+                    max_score = 0.0
                 else:
-                    # Fallback: use single score for all categories
-                    overall_score = float(probs[0][0].item())
-                    scores = {cat: overall_score for cat in self.categories}
+                    # Map Granite Guardian categories to our categories
+                    # Granite: SAFE, HATE, ABUSE, PROFANITY
+                    # Ours: hate, harassment, violence, sexual, self_harm
+                    scores = {}
+                    
+                    # HATE -> hate
+                    scores['hate'] = categories.get('HATE', 0.0)
+                    
+                    # ABUSE -> harassment + violence
+                    abuse_score = categories.get('ABUSE', 0.0)
+                    scores['harassment'] = abuse_score
+                    scores['violence'] = abuse_score * 0.8  # Slightly lower for violence
+                    
+                    # PROFANITY -> sexual (approximate mapping)
+                    scores['sexual'] = categories.get('PROFANITY', 0.0) * 0.5
+                    
+                    # self_harm - not directly detected by Granite, use low score
+                    scores['self_harm'] = max(categories.get('HATE', 0.0), categories.get('ABUSE', 0.0)) * 0.3
+                    
+                    max_score = max(scores.values()) if scores else 0.0
+                
+                return {
+                    "score": max_score,
+                    "labels": scores,
+                    "method": "granite_guardian",
+                    "device": self.device,
+                    "granite_label": label,
+                    "granite_confidence": confidence
+                }
             
-            max_score = max(scores.values()) if scores else 0.0
-            
-            return {
-                "score": max_score,
-                "labels": scores,
-                "method": "granite_guardian" if not self.is_fallback else "fallback_model",
-                "device": self.device
-            }
+            # Fallback if model_loader not available
+            return self._detect_heuristic(text)
             
         except Exception as e:
             logger.error(f"Model inference error: {e}")

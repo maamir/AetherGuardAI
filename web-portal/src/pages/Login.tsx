@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Mail, Lock, AlertCircle } from 'lucide-react';
+import { api } from '../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -15,29 +16,15 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8080/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Invalid credentials');
-      }
-
-      const data = await response.json();
+      const data = await api.login({ email, password });
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       navigate('/');
     } catch (err) {
-      setError('Invalid email or password');
+      setError(err instanceof Error ? err.message : 'Invalid email or password');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSSOLogin = (provider: string) => {
-    window.location.href = `http://localhost:8080/api/auth/sso/${provider}`;
   };
 
   return (
@@ -212,77 +199,6 @@ export default function Login() {
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
-
-          <div style={{ marginTop: '1.5rem' }}>
-            <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
-              <div style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                alignItems: 'center'
-              }}>
-                <div style={{ width: '100%', borderTop: '1px solid #d1d5db' }}></div>
-              </div>
-              <div style={{
-                position: 'relative',
-                display: 'flex',
-                justifyContent: 'center',
-                fontSize: '0.875rem'
-              }}>
-                <span style={{ padding: '0 0.5rem', background: 'white', color: '#6b7280' }}>
-                  Or continue with
-                </span>
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
-              <button
-                onClick={() => handleSSOLogin('saml')}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  padding: '0.5rem 1rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '0.5rem',
-                  background: 'white',
-                  cursor: 'pointer'
-                }}
-              >
-                <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>SAML</span>
-              </button>
-              <button
-                onClick={() => handleSSOLogin('oauth')}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  padding: '0.5rem 1rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '0.5rem',
-                  background: 'white',
-                  cursor: 'pointer'
-                }}
-              >
-                <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>OAuth</span>
-              </button>
-              <button
-                onClick={() => handleSSOLogin('ad')}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  padding: '0.5rem 1rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '0.5rem',
-                  background: 'white',
-                  cursor: 'pointer'
-                }}
-              >
-                <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>AD</span>
-              </button>
-            </div>
-          </div>
 
           <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
             <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>

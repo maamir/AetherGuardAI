@@ -216,9 +216,9 @@ class PIIDetector:
             "ROUTING_NUMBER": r'\b[0-9]{9}\b',
             "BANK_ACCOUNT": r'\b\d{8,17}\b',
             
-            # Government IDs
-            "US_PASSPORT": r'\b[0-9]{9}\b',
-            "US_DRIVER_LICENSE": r'\b[A-Z]{1,2}\d{5,8}\b',
+            # Government IDs (more specific)
+            "US_PASSPORT": r'\b[0-9]{9}\b(?=.*passport)',  # Only if "passport" is mentioned
+            "US_DRIVER_LICENSE": r'\b(?:DL|CDL)[-\s]?[A-Z0-9]{5,12}\b',  # More specific format
             "UK_NHS_NUMBER": r'\b\d{3}[-\s]?\d{3}[-\s]?\d{4}\b',
             "CANADA_SIN": r'\b\d{3}[-\s]?\d{3}[-\s]?\d{3}\b',
             
@@ -242,9 +242,9 @@ class PIIDetector:
             "FINGERPRINT_ID": r'\bFP-[0-9A-F]{16}\b',
             "RETINA_SCAN_ID": r'\bRS-[0-9A-F]{16}\b',
             
-            # Vehicle
+            # Vehicle (more specific patterns)
             "VIN": r'\b[A-HJ-NPR-Z0-9]{17}\b',
-            "LICENSE_PLATE": r'\b[A-Z0-9]{2,7}\b',
+            "LICENSE_PLATE": r'\b[A-Z]{1,3}[-\s]?[0-9]{1,4}[-\s]?[A-Z]{0,3}\b',  # More specific format
             
             # Education
             "STUDENT_ID": r'\bSTU-\d{6,10}\b',
@@ -269,8 +269,8 @@ class PIIDetector:
             # Coordinates
             "GPS_COORDINATES": r'\b[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?),\s*[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)\b',
             
-            # Usernames/Handles
-            "USERNAME": r'@[a-zA-Z0-9_]{3,15}\b',
+            # Usernames/Handles (more specific)
+            "SOCIAL_MEDIA_HANDLE": r'@[a-zA-Z0-9_]{3,15}\b',  # Renamed for clarity
             "SLACK_USER_ID": r'\bU[A-Z0-9]{8,10}\b',
             
             # Device IDs

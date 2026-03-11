@@ -12,7 +12,8 @@ import {
   Database,
   LogOut,
   Settings,
-  Key
+  Key,
+  Server
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -37,6 +38,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/analytics', icon: BarChart3, label: 'Analytics' },
     { path: '/audit', icon: FileText, label: 'Audit Logs' },
     { path: '/policies', icon: Shield, label: 'Policies' },
+    { path: '/llm-providers', icon: Server, label: 'LLM Providers' },
     { path: '/models', icon: Database, label: 'Models' },
     { path: '/tenants', icon: Building, label: 'Tenants' },
     { path: '/users', icon: Users, label: 'Users' },

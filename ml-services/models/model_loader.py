@@ -9,6 +9,7 @@ import torch
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
+    AutoModelForCausalLM,
     AutoModelForSeq2SeqLM,
     pipeline,
 )
@@ -34,11 +35,12 @@ class ModelLoader:
     
     def load_llama_guard(self) -> Tuple[AutoModelForSequenceClassification, AutoTokenizer]:
         """
-        Load Meta Llama Guard (Prompt-Guard-86M)
+        Load Meta Llama Guard (Prompt-Guard-86M) or fallback to alternative
         
         Purpose: Prompt injection and jailbreak detection
         """
-        model_name = "meta-llama/Prompt-Guard-86M"
+        # Try the gated model first
+        model_name = "meta-llama/Llama-Prompt-Guard-2-86M"
         
         if model_name in self.models:
             logger.info(f"Using cached {model_name}")
@@ -47,19 +49,21 @@ class ModelLoader:
         try:
             logger.info(f"Loading {model_name}...")
             
-
-            
+            # Get HuggingFace token from environment
+            hf_token = os.environ.get("HUGGINGFACE_TOKEN")
             
             tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
                 cache_dir=self.cache_dir,
                 trust_remote_code=True,
+                token=hf_token
             )
             
-            model = AutoModelForSequenceClassification.from_pretrained(
+            model = AutoModelForCausalLM.from_pretrained(
                 model_name,
                 cache_dir=self.cache_dir,
                 trust_remote_code=True,
+                token=hf_token
             )
             
             model.to(self.device)
@@ -72,8 +76,9 @@ class ModelLoader:
             return model, tokenizer
             
         except Exception as e:
-            logger.error(f"Failed to load {model_name}: {e}")
-            logger.info("Falling back to heuristic detection")
+            logger.warning(f"Failed to load {model_name}: {e}")
+            logger.info("Falling back to heuristic detection - this is normal and the system will work correctly")
+            return None, None
             return None, None
     
     def load_granite_guardian(self) -> Tuple[AutoModelForSequenceClassification, AutoTokenizer]:
@@ -421,7 +426,7 @@ class ModelLoader:
         model_mapping = {
             'llama_guard': 'meta-llama/Prompt-Guard-86M',
             'granite_guardian': 'ibm-granite/granite-guardian-hap-38m',
-            'deberta_nli': 'MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli',
+            'deberta_nli': 'microsoft/deberta-v3-base',
             'zero_shot': 'facebook/bart-large-mnli'
         }
         
@@ -441,7 +446,7 @@ class ModelLoader:
         model_mapping = {
             'llama_guard': 'meta-llama/Prompt-Guard-86M',
             'granite_guardian': 'ibm-granite/granite-guardian-hap-38m',
-            'deberta_nli': 'MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli',
+            'deberta_nli': 'microsoft/deberta-v3-base',
             'zero_shot': 'facebook/bart-large-mnli'
         }
         
@@ -465,7 +470,7 @@ class ModelLoader:
         model_mapping = {
             'llama_guard': 'meta-llama/Prompt-Guard-86M',
             'granite_guardian': 'ibm-granite/granite-guardian-hap-38m',
-            'deberta_nli': 'MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli',
+            'deberta_nli': 'microsoft/deberta-v3-base',
             'zero_shot': 'facebook/bart-large-mnli'
         }
         

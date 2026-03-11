@@ -77,11 +77,11 @@ class SecretsDetector:
             "basic_auth": r"Basic\s+[A-Za-z0-9+/=]+",
             
             # Passwords in code and text
-            "password_assignment": r"password['\"]?\s*[:=]\s*['\"]?[^\s'\"]{8,}['\"]?",
-            "password_in_text": r"(?:password|passwd|pwd|pass)\s+(?:is|:)?\s*['\"]?([A-Za-z0-9!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?]{8,})['\"]?",
-            "my_password": r"(?:my|the|your)\s+password\s+(?:is|:)?\s*['\"]?([A-Za-z0-9!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?]{6,})['\"]?",
+            "password_assignment": r"password\s*[:=]\s*['\"]?([^\s'\"]{3,})['\"]?",
+            "password_in_text": r"(?:password|passwd|pwd|pass)\s+(?:is|:)?\s*['\"]?([A-Za-z0-9!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?]{3,})['\"]?",
+            "my_password": r"(?:my|the|your)\s+password\s+(?:is|:)?\s*['\"]?([A-Za-z0-9!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?]{3,})['\"]?",
             "secret_assignment": r"secret['\"]?\s*[:=]\s*['\"]?[^\s'\"]{16,}['\"]?",
-            "credentials_in_text": r"(?:credentials?|login|auth)\s+(?:is|are|:)?\s*['\"]?([A-Za-z0-9!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?]{8,})['\"]?",
+            "credentials_in_text": r"(?:credentials?|login|auth)\s+(?:is|are|:)?\s*['\"]?([A-Za-z0-9!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?]{3,})['\"]?",
             
             # Cryptocurrency
             "bitcoin_address": r"[13][a-km-zA-HJ-NP-Z1-9]{25,34}",
@@ -196,9 +196,8 @@ class SecretsDetector:
         # Skip common false positives
         false_positives = [
             "example", "test", "demo", "placeholder", "your_key_here",
-            "insert_key_here", "replace_with", "TODO", "FIXME", "password123",
-            "12345", "qwerty", "abc123", "letmein", "welcome", "admin",
-            "changeme", "default", "sample"
+            "insert_key_here", "replace_with", "TODO", "FIXME",
+            "qwerty", "letmein", "welcome", "changeme", "default", "sample"
         ]
         
         value_lower = value.lower()
@@ -207,9 +206,14 @@ class SecretsDetector:
         if any(fp in value_lower for fp in false_positives):
             return False
         
-        # Skip very short values (likely not real secrets)
-        if len(value) < 6:
-            return False
+        # Skip very short values (likely not real secrets) - but allow for password patterns
+        if secret_type not in ["password_assignment", "password_in_text", "my_password", "credentials_in_text"]:
+            if len(value) < 6:
+                return False
+        else:
+            # For password patterns, allow shorter values (minimum 3 characters)
+            if len(value) < 3:
+                return False
         
         # Type-specific validation
         if secret_type == "aws_access_key":
@@ -230,16 +234,14 @@ class SecretsDetector:
             # Connection strings should have valid schemes
             return "://" in value and not value.startswith("http://example")
         
-        elif secret_type in ["password_in_text", "my_password", "credentials_in_text"]:
+        elif secret_type in ["password_in_text", "my_password", "credentials_in_text", "password_assignment"]:
             # For password in text, validate it looks like a real password
-            # Must have at least 6 characters and some complexity
-            if len(value) < 6:
+            # Must have at least 3 characters
+            if len(value) < 3:
                 return False
             
-            # Check for some complexity (not all same character)
-            if len(set(value)) < 3:
-                return False
-            
+            # Don't require complexity for simple passwords like "123"
+            # Just ensure it's not a common placeholder
             return True
         
         return True

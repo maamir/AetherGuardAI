@@ -45,5 +45,8 @@ env/**
 docs/**
 *.md
 
+#Configuration
+./docker-compose.yml
+
 #Files Exclusions
 !README.md

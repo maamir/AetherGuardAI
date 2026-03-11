@@ -107,10 +107,6 @@ async def detect_pii(request: TextRequest):
         logger.error(f"PII detection error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
-
 
 class BiasRequest(BaseModel):
     outputs: List[str]
@@ -472,3 +468,7 @@ async def check_pattern_update():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)
