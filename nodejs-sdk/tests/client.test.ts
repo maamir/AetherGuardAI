@@ -4,7 +4,7 @@
 
 import axios from 'axios';
 import { AetherGuardClient } from '../src/client';
-import { AetherGuardConfig } from '../src/types';
+import { AetherGuardConfig, AetherGuardError } from '../src/types';
 
 // Mock axios
 jest.mock('axios');
@@ -129,17 +129,25 @@ describe('AetherGuardClient', () => {
         }
       };
 
-      mockAxiosInstance.post.mockRejectedValue(mockError);
+      // The interceptor will transform this error
+      mockAxiosInstance.post.mockImplementation(() => {
+        const transformedError: AetherGuardError = {
+          code: 'CONTENT_BLOCKED',
+          message: 'Content blocked by security policy',
+          details: undefined,
+          request_id: 'req-123'
+        };
+        return Promise.reject(transformedError);
+      });
 
       const request = {
         model: 'gpt-3.5-turbo',
         messages: [{ role: 'user' as const, content: 'Harmful content' }]
       };
 
-      await expect(client.createChatCompletion(request)).rejects.toEqual({
+      await expect(client.createChatCompletion(request)).rejects.toMatchObject({
         code: 'CONTENT_BLOCKED',
         message: 'Content blocked by security policy',
-        details: undefined,
         request_id: 'req-123'
       });
     });

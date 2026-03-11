@@ -148,10 +148,10 @@ export async function retryWithBackoff<T>(
 export function sanitizeForLogging(text: string): string {
   // Remove potential API keys, tokens, passwords
   return text
-    .replace(/sk-[a-zA-Z0-9]{48}/g, 'sk-***')
+    .replace(/sk-[a-zA-Z0-9]{32,}/g, 'sk-***')
     .replace(/Bearer [a-zA-Z0-9-._~+/]+=*/g, 'Bearer ***')
-    .replace(/password["\s]*[:=]["\s]*[^"\s,}]+/gi, 'password: "***"')
-    .replace(/token["\s]*[:=]["\s]*[^"\s,}]+/gi, 'token: "***"');
+    .replace(/password["\s]*[:=]["\s]*"[^"]+"/gi, 'password: "***"')
+    .replace(/token["\s]*[:=]["\s]*"[^"]+"/gi, 'token: "***"');
 }
 
 /**
@@ -191,7 +191,7 @@ export function deepMerge<T extends Record<string, any>>(target: T, source: Part
   for (const key in source) {
     if (source[key] !== undefined) {
       if (typeof source[key] === 'object' && source[key] !== null && !Array.isArray(source[key])) {
-        result[key] = deepMerge(result[key] || {}, source[key]);
+        result[key] = deepMerge(result[key] || {} as any, source[key] as any);
       } else {
         result[key] = source[key] as T[Extract<keyof T, string>];
       }

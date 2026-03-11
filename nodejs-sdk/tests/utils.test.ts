@@ -251,7 +251,7 @@ describe('Utility Functions', () => {
         b: { c: 4, f: 5 },
         g: 6
       };
-      const result = deepMerge(target, source);
+      const result = deepMerge(target as any, source);
       expect(result).toEqual({
         a: 1,
         b: { c: 4, d: 3, f: 5 },
@@ -263,7 +263,7 @@ describe('Utility Functions', () => {
     it('should handle undefined values', () => {
       const target = { a: 1, b: 2 };
       const source = { b: undefined, c: 3 };
-      const result = deepMerge(target, source);
+      const result = deepMerge(target as any, source);
       expect(result).toEqual({ a: 1, b: 2, c: 3 });
     });
   });
