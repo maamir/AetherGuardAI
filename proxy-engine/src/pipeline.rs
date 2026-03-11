@@ -1,22 +1,31 @@
 use crate::{audit::AuditLogger, security::SecurityEngine, CompletionRequest, CompletionResponse};
+use crate::crypto::{AetherSign, ProvenanceTracker, EventType};
 use anyhow::{Context, Result};
 use axum::http::HeaderMap;
 use chrono::Utc;
 use sha2::{Digest, Sha256};
-use tracing::warn;
+use tracing::{warn, info, debug};
 use uuid::Uuid;
+use std::sync::Arc;
 
 pub struct RequestPipeline {
     security: SecurityEngine,
     audit: AuditLogger,
+    aether_sign: Arc<AetherSign>,
+    provenance_tracker: Arc<ProvenanceTracker>,
 }
 
 impl RequestPipeline {
-    pub fn new() -> Self {
-        Self {
+    pub async fn new() -> Result<Self> {
+        let aether_sign = Arc::new(AetherSign::new().await?);
+        let provenance_tracker = Arc::new(ProvenanceTracker::new(aether_sign.clone()).await?);
+        
+        Ok(Self {
             security: SecurityEngine::new(),
             audit: AuditLogger::new(),
-        }
+            aether_sign,
+            provenance_tracker,
+        })
     }
 
     /// Seven-stage pipeline processing
@@ -36,8 +45,27 @@ impl RequestPipeline {
         // Stage 3: Cleanse - PII redaction, injection scan
         self.security.scan_input(&mut req).await?;
 
-        // Stage 4: AetherSign - compute request fingerprint
+        // Stage 4: AetherSign - cryptographic signing with watermarking
         let input_fingerprint = self.compute_fingerprint(&req);
+        let input_signature = self.aether_sign.sign_model_checkpoint(&input_fingerprint).await
+            .context("Failed to sign input fingerprint")?;
+        
+        // Record inference event in provenance chain
+        let inference_metadata = serde_json::json!({
+            "model": req.model,
+            "message_count": req.messages.len(),
+            "max_tokens": req.max_tokens,
+            "input_fingerprint": input_fingerprint,
+            "timestamp": Utc::now().to_rfc3339()
+        });
+        
+        self.provenance_tracker.record_event(
+            EventType::Inference,
+            &req.model,
+            inference_metadata,
+            Some(&input_signature), // Use signature as watermark data
+            vec![] // No cross-model references for basic inference
+        ).await.context("Failed to record inference event")?;
 
         // Stage 5: Inference - forward to LLM provider
         let response = self.forward_to_llm(&req).await?;
@@ -45,10 +73,15 @@ impl RequestPipeline {
         // Stage 6: Verify - post-inference checks
         self.security.scan_output(&response).await?;
 
-        // Stage 7: Egress - prepare response with audit headers
+        // Stage 7: Egress - prepare response with cryptographic signatures
         let output_fingerprint = self.compute_response_fingerprint(&response);
+        let output_signature = self.aether_sign.sign_inference_output(
+            &output_fingerprint,
+            &req.model,
+            Some(&input_signature) // Include input signature as watermark
+        ).await.context("Failed to sign output fingerprint")?;
         
-        // Log to audit trail
+        // Log to audit trail with cryptographic proof
         self.audit.log_transaction(
             &request_id,
             &req,
@@ -60,8 +93,15 @@ impl RequestPipeline {
 
         let mut response_headers = HeaderMap::new();
         response_headers.insert("X-Request-ID", request_id.parse().unwrap());
-        response_headers.insert("X-AetherSign", output_fingerprint.parse().unwrap());
+        response_headers.insert("X-AetherSign", output_signature.parse().unwrap());
+        response_headers.insert("X-AetherSign-Input", input_signature.parse().unwrap());
+        
+        // Add provenance information
+        if let Some(active_key) = self.aether_sign.get_active_public_key() {
+            response_headers.insert("X-AetherSign-Key-ID", active_key.key_id.parse().unwrap());
+        }
 
+        debug!("Request processed through 7-stage pipeline with cryptographic signatures");
         Ok((response, response_headers))
     }
 

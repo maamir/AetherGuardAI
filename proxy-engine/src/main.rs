@@ -78,7 +78,7 @@ struct Usage {
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let pipeline = Arc::new(RequestPipeline::new());
+    let pipeline = Arc::new(RequestPipeline::new().await.expect("Failed to initialize pipeline"));
     let state = AppState { pipeline };
 
     let app = Router::new()
@@ -96,7 +96,7 @@ async fn main() {
         .await
         .unwrap();
     
-    info!("AetherGuard Proxy listening on {}", listener.local_addr().unwrap());
+    info!("AetherGuard Proxy listening on {} with production AetherSign", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 }
 
