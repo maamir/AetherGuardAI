@@ -1,4 +1,4 @@
-# AetherGuard AI - AetherGuard AI: Zero-Trust Firewall for the Generative Era
+# AetherGuard AI - Zero-Trust Firewall for the Generative Era
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
