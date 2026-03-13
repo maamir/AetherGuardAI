@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Policy-as-Code engine using OPA/Rego-style rules
+#[allow(dead_code)]
 pub struct PolicyEngine {
     policies: HashMap<String, Policy>,
     policy_version: String,
@@ -70,6 +71,7 @@ pub struct PolicyEvaluation {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct RequestContext {
     pub user_id: String,
     pub tokens_requested: u32,
@@ -82,11 +84,13 @@ pub struct RequestContext {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct AuthContext {
     pub mfa_verified: bool,
     pub role: String,
 }
 
+#[allow(dead_code)]
 impl PolicyEngine {
     pub fn new() -> Self {
         let mut engine = Self {

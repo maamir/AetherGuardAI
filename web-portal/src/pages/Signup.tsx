@@ -56,22 +56,43 @@ export default function Signup() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate passwords match
+    if (formData.password !== formData.confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
+    
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8080/api/auth/signup', {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+      const response = await fetch(`${API_URL}/api/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, tier: selectedTier }),
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          confirmPassword: formData.confirmPassword,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          companyName: formData.companyName,
+          phone: formData.phone,
+          industry: formData.industry,
+          tier: selectedTier
+        }),
       });
 
-      if (!response.ok) throw new Error('Signup failed');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Signup failed');
+      }
 
       const data = await response.json();
       localStorage.setItem('token', data.token);
-      navigate('/onboarding');
+      navigate('/dashboard');
     } catch (err) {
-      alert('Signup failed. Please try again.');
+      alert(err instanceof Error ? err.message : 'Signup failed. Please try again.');
     } finally {
       setLoading(false);
     }

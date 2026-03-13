@@ -278,6 +278,58 @@ class ApiClient {
 
     return this.handleResponse(response);
   }
+
+  // Activities
+  async getActivities(limit: number = 50, types?: string[]) {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    if (types && types.length > 0) {
+      params.append('types', types.join(','));
+    }
+
+    const response = await fetch(`${this.baseURL}/api/activities?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+
+    return this.handleResponse(response);
+  }
+
+  async logActivity(type: string, description: string, metadata?: Record<string, any>) {
+    const response = await fetch(`${this.baseURL}/api/activities`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ type, description, metadata }),
+    });
+
+    return this.handleResponse(response);
+  }
+
+  // Provider Statistics
+  async getProviderStats(providerId: string, days: number = 7) {
+    const params = new URLSearchParams({ days: days.toString() });
+
+    const response = await fetch(
+      `${this.baseURL}/api/llm-providers/${providerId}/stats?${params}`,
+      {
+        headers: this.getAuthHeaders(),
+      }
+    );
+
+    return this.handleResponse(response);
+  }
+
+  // API Key Statistics
+  async getApiKeyStats(apiKeyId: string, days: number = 7) {
+    const params = new URLSearchParams({ days: days.toString() });
+
+    const response = await fetch(
+      `${this.baseURL}/api/api-keys/${apiKeyId}/stats?${params}`,
+      {
+        headers: this.getAuthHeaders(),
+      }
+    );
+
+    return this.handleResponse(response);
+  }
 }
 
 // Export singleton instance

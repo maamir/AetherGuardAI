@@ -307,27 +307,7 @@ class WatermarkEngine:
                 "watermark_id": None,
                 "metadata": {"error": str(e)}
             }
-                "robustness_score": 0.85,
-                "original_size": len(image_data),
-                "watermarked_size": len(watermarked_image)
-            }
-            result_metadata.update(metadata)
-            
-            logger.info(f"Image watermark embedded: {watermark_id}")
-            
-            return {
-                "watermarked_image": watermarked_image,
-                "watermark_id": watermark_id,
-                "metadata": result_metadata
-            }
-            
-        except Exception as e:
-            logger.error(f"Image watermarking error: {e}")
-            return {
-                "watermarked_image": image_data,
-                "watermark_id": None,
-                "metadata": {"error": str(e)}
-            }
+
     
     def detect_image_watermark(self, image_data: bytes) -> Dict:
         """

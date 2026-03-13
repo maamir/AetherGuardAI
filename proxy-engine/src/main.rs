@@ -21,12 +21,16 @@ mod gdpr_compliance;
 mod qldb_integration;
 mod request_attribution;
 mod data_residency;
+mod database;
 
 use pipeline::RequestPipeline;
+use database::Database;
 
 #[derive(Clone)]
 struct AppState {
     pipeline: Arc<RequestPipeline>,
+    #[allow(dead_code)]
+    database: Option<Arc<Database>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -78,8 +82,14 @@ struct Usage {
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let pipeline = Arc::new(RequestPipeline::new().await.expect("Failed to initialize pipeline"));
-    let state = AppState { pipeline };
+    info!("Initializing AetherGuard Proxy Engine...");
+
+    let pipeline = RequestPipeline::new().await.expect("Failed to initialize pipeline");
+    
+    let state = AppState { 
+        pipeline: Arc::new(pipeline),
+        database: None, // Database is handled internally by the pipeline
+    };
 
     let app = Router::new()
         .route("/v1/chat/completions", post(proxy_completion))

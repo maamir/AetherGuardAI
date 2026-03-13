@@ -3,7 +3,6 @@ LLM Provider Model
 """
 
 from sqlalchemy import Column, String, Boolean, DateTime, JSON, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
 from .base import Base
@@ -12,8 +11,8 @@ from .base import Base
 class LLMProvider(Base):
     __tablename__ = "llm_providers"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Provider info
     provider_type = Column(String(50), nullable=False)  # openai, anthropic, custom, etc.
@@ -41,8 +40,8 @@ class LLMProvider(Base):
     
     def to_dict(self, include_api_key=False):
         data = {
-            "id": str(self.id),
-            "tenantId": str(self.tenant_id),
+            "id": self.id,
+            "tenantId": self.tenant_id,
             "providerType": self.provider_type,
             "providerName": self.provider_name,
             "providerUrl": self.provider_url,

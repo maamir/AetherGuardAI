@@ -14,6 +14,7 @@ from .analytics import router as analytics_router
 from .api_keys import router as api_keys_router
 from .provider_health import router as provider_health_router
 from .reports import router as reports_router
+from .activities import router as activities_router
 
 __all__ = [
     "admin_auth_router",
@@ -27,4 +28,5 @@ __all__ = [
     "api_keys_router",
     "provider_health_router",
     "reports_router",
+    "activities_router",
 ]

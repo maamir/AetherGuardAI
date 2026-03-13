@@ -7,13 +7,11 @@ import {
   Shield, 
   Activity,
   TrendingUp,
-  Building,
-  Users,
   Database,
   LogOut,
-  Settings,
   Key,
-  Server
+  Server,
+  AlertTriangle
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -36,12 +34,11 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/advanced-analytics', icon: TrendingUp, label: 'Advanced Analytics' },
     { path: '/budgets', icon: DollarSign, label: 'Budgets' },
     { path: '/analytics', icon: BarChart3, label: 'Analytics' },
-    { path: '/audit', icon: FileText, label: 'Audit Logs' },
+    { path: '/audit', icon: FileText, label: 'Activity' },
+    { path: '/security-events', icon: AlertTriangle, label: 'Security Events' },
     { path: '/policies', icon: Shield, label: 'Policies' },
     { path: '/llm-providers', icon: Server, label: 'LLM Providers' },
     { path: '/models', icon: Database, label: 'Models' },
-    { path: '/tenants', icon: Building, label: 'Tenants' },
-    { path: '/users', icon: Users, label: 'Users' },
     { path: '/api-keys', icon: Key, label: 'API Keys' },
   ]
 

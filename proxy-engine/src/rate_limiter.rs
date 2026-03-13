@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
 /// Rate limiter with per-user token budgets and request throttling
+#[allow(dead_code)]
 pub struct RateLimiter {
     // User ID -> Budget info
     user_budgets: Arc<RwLock<HashMap<String, UserBudget>>>,
@@ -15,6 +16,7 @@ pub struct RateLimiter {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RateLimitConfig {
     pub default_token_budget: u32,
     pub default_requests_per_minute: u32,
@@ -23,6 +25,7 @@ pub struct RateLimitConfig {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct UserBudget {
     pub user_id: String,
     pub total_budget: u32,
@@ -34,6 +37,7 @@ pub struct UserBudget {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct RateLimitResult {
     pub allowed: bool,
     pub reason: String,
@@ -53,6 +57,7 @@ impl Default for RateLimitConfig {
     }
 }
 
+#[allow(dead_code)]
 impl RateLimiter {
     pub fn new(config: RateLimitConfig) -> Self {
         Self {

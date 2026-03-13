@@ -3,7 +3,7 @@ API Keys Router
 Tenant-facing API key management
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional, Dict
@@ -295,3 +295,78 @@ async def rotate_api_key(
     result["key"] = new_api_key  # Override with actual key
     
     return result
+
+
+
+@router.get("/{key_id}/stats")
+async def get_api_key_stats(
+    key_id: str,
+    days: int = Query(7, ge=1, le=90),
+    current_user: dict = Depends(get_current_tenant_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get usage statistics for a specific API key
+    """
+    from models.usage_analytics import UsageAnalytics
+    from models.llm_provider import LLMProvider
+    from sqlalchemy import func
+    
+    # Verify API key ownership
+    api_key = db.query(ApiKey).filter(
+        ApiKey.id == key_id,
+        ApiKey.tenant_id == current_user["tenant_id"]
+    ).first()
+    
+    if not api_key:
+        raise HTTPException(status_code=404, detail="API key not found")
+    
+    # Calculate date range
+    start_date = datetime.utcnow().date() - timedelta(days=days)
+    
+    # Query usage statistics
+    stats = db.query(
+        func.count(UsageAnalytics.id).label("total_requests"),
+        func.sum(UsageAnalytics.cost_usd).label("total_cost"),
+        func.avg(UsageAnalytics.avg_latency_ms).label("avg_latency"),
+        func.sum(UsageAnalytics.total_tokens).label("total_tokens")
+    ).filter(
+        UsageAnalytics.tenant_id == current_user["tenant_id"],
+        UsageAnalytics.api_key_id == key_id,
+        UsageAnalytics.date >= start_date
+    ).first()
+    
+    # Get top provider used with this API key
+    top_provider_row = db.query(
+        UsageAnalytics.provider_id,
+        func.count(UsageAnalytics.id).label("count")
+    ).filter(
+        UsageAnalytics.tenant_id == current_user["tenant_id"],
+        UsageAnalytics.api_key_id == key_id,
+        UsageAnalytics.provider_id.isnot(None)
+    ).group_by(
+        UsageAnalytics.provider_id
+    ).order_by(
+        func.count(UsageAnalytics.id).desc()
+    ).first()
+    
+    # Get provider name if found
+    top_provider_name = None
+    if top_provider_row and top_provider_row.provider_id:
+        provider = db.query(LLMProvider).filter(
+            LLMProvider.id == top_provider_row.provider_id
+        ).first()
+        if provider:
+            top_provider_name = provider.provider_name
+    
+    return {
+        "api_key_id": key_id,
+        "api_key_name": api_key.name,
+        "total_requests": stats.total_requests or 0,
+        "total_cost": float(stats.total_cost or 0),
+        "avg_latency": int(stats.avg_latency or 0),
+        "total_tokens": stats.total_tokens or 0,
+        "top_provider": top_provider_name,
+        "last_used": api_key.last_used_at.isoformat() if api_key.last_used_at else None,
+        "period_days": days
+    }

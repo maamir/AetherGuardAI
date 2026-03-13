@@ -11,6 +11,7 @@ from .usage_analytics import UsageAnalytics
 from .security_event import SecurityEvent
 from .audit_log import AuditLog
 from .api_key import ApiKey
+from .activity import Activity
 
 __all__ = [
     "AdminUser",
@@ -21,4 +22,5 @@ __all__ = [
     "SecurityEvent",
     "AuditLog",
     "ApiKey",
+    "Activity",
 ]

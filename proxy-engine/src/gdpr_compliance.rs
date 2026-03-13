@@ -7,6 +7,7 @@ use tokio::sync::RwLock;
 
 /// GDPR/CCPA Compliance Manager
 /// Handles data retention, right to erasure, and privacy controls
+#[allow(dead_code)]
 pub struct ComplianceManager {
     config: ComplianceConfig,
     user_consents: Arc<RwLock<HashMap<String, UserConsent>>>,
@@ -100,6 +101,7 @@ impl Default for ComplianceConfig {
     }
 }
 
+#[allow(dead_code)]
 impl ComplianceManager {
     pub fn new(config: ComplianceConfig) -> Self {
         Self {
@@ -441,8 +443,11 @@ mod tests {
         assert_eq!(records.len(), 0);
     }
 }
+
+#[allow(dead_code)]
+impl ComplianceManager {
     /// Restrict processing for a user (Article 18)
-    async fn restrict_user_processing(&self, user_id: &str) -> Result<()> {
+    pub async fn restrict_user_processing(&self, user_id: &str) -> Result<()> {
         let mut retention = self.data_retention.write().await;
         
         // Mark all user records as processing-restricted
@@ -458,7 +463,7 @@ mod tests {
     }
 
     /// Record processing objection (Article 21)
-    async fn record_processing_objection(&self, user_id: &str) -> Result<()> {
+    pub async fn record_processing_objection(&self, user_id: &str) -> Result<()> {
         let mut retention = self.data_retention.write().await;
         
         // Mark user as having objected to processing
@@ -536,7 +541,7 @@ mod tests {
     }
 
     /// Check if processing is restricted for user
-    async fn is_processing_restricted(&self, user_id: &str) -> bool {
+    pub async fn is_processing_restricted(&self, user_id: &str) -> bool {
         let retention = self.data_retention.read().await;
         retention.values().any(|record| 
             record.user_id == user_id && record.processing_restricted
@@ -544,7 +549,7 @@ mod tests {
     }
 
     /// Check if user has objected to processing
-    async fn has_processing_objection(&self, user_id: &str) -> bool {
+    pub async fn has_processing_objection(&self, user_id: &str) -> bool {
         let retention = self.data_retention.read().await;
         retention.values().any(|record| 
             record.user_id == user_id && record.processing_objected
@@ -635,6 +640,7 @@ mod tests {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ComplianceEnforcement {
     pub allowed: bool,
     pub reason: String,
@@ -642,6 +648,7 @@ pub struct ComplianceEnforcement {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ComplianceReport {
     pub total_records: usize,
     pub gdpr_applicable: usize,

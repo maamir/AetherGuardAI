@@ -27,7 +27,7 @@ export class AetherGuardClient {
 
   constructor(config: AetherGuardConfig) {
     this.config = {
-      baseUrl: 'http://localhost:8080',
+      baseUrl: process.env.AETHERGUARD_BASE_URL || 'http://localhost:8080',
       timeout: 30000,
       retries: 3,
       debug: false,

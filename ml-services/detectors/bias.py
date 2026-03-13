@@ -318,18 +318,76 @@ class BiasDetector:
             'appearance': ['attractive', 'unattractive', 'overweight', 'skinny']
         }
         
+        # Bias patterns - stereotypes and generalizations
+        bias_patterns = {
+            'gender_stereotype': [
+                r'\b(women|woman|female|girl|girls)\s+(are|is)\s+(naturally|inherently|typically|usually|always|never)\s+\w+\s+(at|in|with)',
+                r'\b(men|man|male|boy|boys)\s+(are|is)\s+(naturally|inherently|typically|usually|always|never)\s+\w+\s+(at|in|with)',
+                r'\b(women|woman|female)\s+(can\'t|cannot|shouldn\'t|should not)\s+',
+                r'\b(men|man|male)\s+(can\'t|cannot|shouldn\'t|should not)\s+',
+                r'\b(women|woman|female|girl|girls)\s+(are|is)\s+(worse|better|inferior|superior)',
+                r'\b(men|man|male|boy|boys)\s+(are|is)\s+(worse|better|inferior|superior)',
+            ],
+            'racial_stereotype': [
+                r'\b(black|white|asian|hispanic|latino|latina)\s+(people|person)\s+(are|is)\s+(naturally|inherently|typically|usually|always|never)',
+                r'\b(black|white|asian|hispanic|latino|latina)\s+(people|person)\s+(are|is)\s+(worse|better|inferior|superior)',
+            ],
+            'age_stereotype': [
+                r'\b(old|older|elderly|senior)\s+(people|person)\s+(are|is)\s+(naturally|inherently|typically|usually|always|never)',
+                r'\b(young|younger)\s+(people|person)\s+(are|is)\s+(naturally|inherently|typically|usually|always|never)',
+            ],
+            'ability_stereotype': [
+                r'\b(disabled|handicapped)\s+(people|person)\s+(are|is)\s+(naturally|inherently|typically|usually|always|never)',
+            ],
+            'generalization': [
+                r'\ball\s+(women|men|blacks|whites|asians|hispanics|latinos|latinas|muslims|christians|jews)\s+(are|is)',
+                r'\bevery\s+(woman|man|black|white|asian|hispanic|latino|latina|muslim|christian|jew)\s+(is|are)',
+            ]
+        }
+        
         detected_bias = {}
+        detected_patterns = {}
         text_lower = text.lower()
         
+        # Check for biased terms
         for category, terms in biased_terms.items():
             found_terms = [term for term in terms if term in text_lower]
             if found_terms:
                 detected_bias[category] = found_terms
         
+        # Check for bias patterns using regex
+        import re
+        for pattern_category, patterns in bias_patterns.items():
+            for pattern in patterns:
+                if re.search(pattern, text_lower):
+                    if pattern_category not in detected_patterns:
+                        detected_patterns[pattern_category] = []
+                    detected_patterns[pattern_category].append(pattern)
+        
+        # Calculate bias score
+        bias_score = 0.0
+        
+        # Biased terms contribute 0.2 per category
+        bias_score += len(detected_bias) * 0.2
+        
+        # Bias patterns contribute heavily - stereotypes are serious
+        # Gender/racial stereotypes get 0.8, other patterns get 0.6
+        for pattern_category in detected_patterns.keys():
+            if 'stereotype' in pattern_category or 'generalization' in pattern_category:
+                bias_score += 0.8
+            else:
+                bias_score += 0.6
+        
+        # Cap at 1.0
+        bias_score = min(bias_score, 1.0)
+        
         return {
-            'biased_language_detected': len(detected_bias) > 0,
+            'biased_language_detected': len(detected_bias) > 0 or len(detected_patterns) > 0,
+            'bias_score': bias_score,
             'categories': detected_bias,
+            'patterns_detected': detected_patterns,
             'total_terms': sum(len(terms) for terms in detected_bias.values()),
+            'total_patterns': sum(len(patterns) for patterns in detected_patterns.values()),
             'suggestions': self._get_inclusive_alternatives(detected_bias)
         }
     

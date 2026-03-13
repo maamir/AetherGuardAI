@@ -17,10 +17,11 @@ source venv/bin/activate
 echo "📦 Installing dependencies..."
 pip install -r requirements.txt
 
-# Set environment variables
-export JWT_SECRET="aetherguard-jwt-secret-change-in-production"
-export DATABASE_URL="sqlite:///aetherguard.db"
+# Set environment variables (use .env file or system environment in production)
+export JWT_SECRET="${JWT_SECRET:-aetherguard-jwt-secret-change-in-production}"
+export DATABASE_URL="${DATABASE_URL:-sqlite:///aetherguard.db}"
 
 # Start the server
-echo "🚀 Starting server on http://localhost:8080"
+PORT=${PORT:-8081}
+echo "🚀 Starting server on http://localhost:${PORT}"
 python main.py

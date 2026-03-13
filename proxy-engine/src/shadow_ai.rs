@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Shadow AI Discovery: Detect unsanctioned LLM usage
+#[allow(dead_code)]
 pub struct ShadowAIDetector {
     known_ai_endpoints: Vec<String>,
     baseline_patterns: HashMap<String, UsageBaseline>,
@@ -33,6 +34,7 @@ pub struct DetectionDetails {
 
 /// ML-based anomaly detection result
 #[derive(Debug)]
+#[allow(dead_code)]
 struct AnomalyResult {
     is_anomaly: bool,
     confidence: f64,
@@ -43,6 +45,7 @@ struct AnomalyResult {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct MethodScores {
     statistical: f64,
     isolation_forest: f64,
@@ -51,6 +54,7 @@ struct MethodScores {
 
 /// Features extracted for anomaly detection
 #[derive(Debug)]
+#[allow(dead_code)]
 struct AnomalyFeatures {
     requests_per_hour_ratio: f64,
     tokens_per_request_ratio: f64,
@@ -64,6 +68,7 @@ struct AnomalyFeatures {
 
 /// Statistical anomaly detection result
 #[derive(Debug)]
+#[allow(dead_code)]
 struct StatisticalResult {
     score: f64,
     deviation: f64,
@@ -72,6 +77,7 @@ struct StatisticalResult {
 
 /// Isolation forest detection result
 #[derive(Debug)]
+#[allow(dead_code)]
 struct IsolationResult {
     score: f64,
     isolation_scores: Vec<f64>,
@@ -80,12 +86,14 @@ struct IsolationResult {
 
 /// Time series anomaly detection result
 #[derive(Debug)]
+#[allow(dead_code)]
 struct TimeSeriesResult {
     score: f64,
     change_points: Vec<usize>,
     trend_score: f64,
 }
 
+#[allow(dead_code)]
 impl ShadowAIDetector {
     pub fn new() -> Self {
         Self {
@@ -662,6 +670,7 @@ impl ShadowAIDetector {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct UsageMetrics {
     pub requests_per_hour: f64,
     pub tokens_per_request: f64,
@@ -669,6 +678,7 @@ pub struct UsageMetrics {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct SystemMetrics {
     pub total_requests_per_hour: f64,
     pub unique_users_active: usize,
@@ -678,6 +688,7 @@ pub struct SystemMetrics {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct CloudLogEntry {
     pub timestamp: String,
     pub user_id: String,

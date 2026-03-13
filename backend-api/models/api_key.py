@@ -3,7 +3,6 @@ API Key Model
 """
 
 from sqlalchemy import Column, String, Integer, Boolean, DateTime, JSON, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
 from .base import Base
@@ -12,9 +11,9 @@ from .base import Base
 class ApiKey(Base):
     __tablename__ = "api_keys"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=True), nullable=False)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), nullable=False)
     
     # Key identification
     name = Column(String(255), nullable=False)
@@ -38,7 +37,7 @@ class ApiKey(Base):
     # Expiration and revocation
     expires_at = Column(DateTime, index=True)
     revoked_at = Column(DateTime)
-    revoked_by = Column(UUID(as_uuid=True), ForeignKey("admin_users.id", ondelete="SET NULL"))
+    revoked_by = Column(String(36), ForeignKey("admin_users.id", ondelete="SET NULL"))
     revoke_reason = Column(Text)
     
     # Security enhancements
@@ -50,9 +49,9 @@ class ApiKey(Base):
     
     def to_dict(self, show_full_key=False):
         data = {
-            "id": str(self.id),
-            "tenantId": str(self.tenant_id),
-            "userId": str(self.user_id),
+            "id": self.id,
+            "tenantId": self.tenant_id,
+            "userId": self.user_id,
             "name": self.name,
             "permissions": self.permissions,
             "rateLimit": self.rate_limit,
@@ -63,7 +62,7 @@ class ApiKey(Base):
             "lastUsedIp": self.last_used_ip,
             "expiresAt": self.expires_at.isoformat() if self.expires_at else None,
             "revokedAt": self.revoked_at.isoformat() if self.revoked_at else None,
-            "revokedBy": str(self.revoked_by) if self.revoked_by else None,
+            "revokedBy": self.revoked_by if self.revoked_by else None,
             "revokeReason": self.revoke_reason,
             "createdAt": self.created_at.isoformat() if self.created_at else None,
             "ipWhitelist": self.ip_whitelist if self.ip_whitelist else [],

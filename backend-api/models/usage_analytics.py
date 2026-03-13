@@ -3,7 +3,6 @@ Usage Analytics Model
 """
 
 from sqlalchemy import Column, String, Integer, DateTime, Date, ForeignKey, DECIMAL
-from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
 from .base import Base
@@ -12,9 +11,9 @@ from .base import Base
 class UsageAnalytics(Base):
     __tablename__ = "usage_analytics"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    api_key_id = Column(UUID(as_uuid=True), ForeignKey("api_keys.id", ondelete="SET NULL"), index=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    api_key_id = Column(String(36), ForeignKey("api_keys.id", ondelete="SET NULL"), index=True)
     date = Column(Date, nullable=False, index=True)
     hour = Column(Integer)
     
@@ -47,9 +46,9 @@ class UsageAnalytics(Base):
     
     def to_dict(self):
         return {
-            "id": str(self.id),
-            "tenantId": str(self.tenant_id),
-            "apiKeyId": str(self.api_key_id) if self.api_key_id else None,
+            "id": self.id,
+            "tenantId": self.tenant_id,
+            "apiKeyId": self.api_key_id if self.api_key_id else None,
             "date": self.date.isoformat() if self.date else None,
             "hour": self.hour,
             "totalRequests": self.total_requests,

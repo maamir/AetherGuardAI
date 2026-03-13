@@ -3,7 +3,6 @@ Tenant Model
 """
 
 from sqlalchemy import Column, String, Integer, Boolean, DateTime, JSON
-from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
 from .base import Base
@@ -12,9 +11,9 @@ from .base import Base
 class Tenant(Base):
     __tablename__ = "tenants"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(255), nullable=False)
-    owner_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    owner_id = Column(String(36), nullable=False, index=True)
     
     # Subscription and billing
     status = Column(String(50), default="active", index=True)
@@ -43,9 +42,9 @@ class Tenant(Base):
     
     def to_dict(self):
         return {
-            "id": str(self.id),
+            "id": self.id,
             "name": self.name,
-            "ownerId": str(self.owner_id),
+            "ownerId": self.owner_id,
             "status": self.status,
             "subscriptionTier": self.subscription_tier,
             "billingEmail": self.billing_email,

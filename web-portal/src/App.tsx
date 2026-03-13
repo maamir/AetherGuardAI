@@ -9,13 +9,12 @@ import AuditLogs from './pages/AuditLogs'
 import Policies from './pages/Policies'
 import PolicyEditor from './pages/PolicyEditor'
 import ModelManagement from './pages/ModelManagement'
-import TenantManagement from './pages/TenantManagement'
-import UserManagement from './pages/UserManagement'
 import ApiKeys from './pages/ApiKeys'
 import LLMProviders from './pages/LLMProviders'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Onboarding from './pages/Onboarding'
+import SecurityEvents from './pages/SecurityEvents'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('token');
@@ -94,20 +93,6 @@ function App() {
           </Layout>
         </PrivateRoute>
       } />
-      <Route path="/tenants" element={
-        <PrivateRoute>
-          <Layout>
-            <TenantManagement />
-          </Layout>
-        </PrivateRoute>
-      } />
-      <Route path="/users" element={
-        <PrivateRoute>
-          <Layout>
-            <UserManagement />
-          </Layout>
-        </PrivateRoute>
-      } />
       <Route path="/api-keys" element={
         <PrivateRoute>
           <Layout>
@@ -119,6 +104,13 @@ function App() {
         <PrivateRoute>
           <Layout>
             <LLMProviders />
+          </Layout>
+        </PrivateRoute>
+      } />
+      <Route path="/security-events" element={
+        <PrivateRoute>
+          <Layout>
+            <SecurityEvents />
           </Layout>
         </PrivateRoute>
       } />

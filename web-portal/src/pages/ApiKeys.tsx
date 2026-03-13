@@ -9,15 +9,16 @@ import ExpirationManager from '../components/ExpirationManager';
 interface ApiKey {
   id: string;
   name: string;
-  key_value: string;
-  created_at: string;
-  last_used_at: string | null;
-  expires_at: string | null;
-  is_active: boolean;
-  usage_count: number;
-  rate_limit_per_minute: number | null;
-  ip_whitelist?: string[];
-  usage_alerts?: Array<{ threshold: number; channel: string; destination: string }>;
+  keyDisplay?: string;  // Masked key for display (e.g., "ag_xxxx****yyyy")
+  key?: string;  // Full key (only returned on creation)
+  createdAt: string;
+  lastUsed: string | null;
+  expiresAt: string | null;
+  isActive: boolean;
+  usageCount: number;
+  rateLimit: number | null;
+  ipWhitelist?: string[];
+  usageAlerts?: Array<{ threshold: number; channel: string; destination: string }>;
 }
 
 export default function ApiKeys() {
@@ -29,6 +30,7 @@ export default function ApiKeys() {
   const [newKeyExpiresAt, setNewKeyExpiresAt] = useState<string | null>(null);
   const [newKeyIpWhitelist, setNewKeyIpWhitelist] = useState<string[]>([]);
   const [newKeyUsageAlerts, setNewKeyUsageAlerts] = useState<Array<{ threshold: number; channel: string; destination: string }>>([]);
+  const [newlyCreatedKey, setNewlyCreatedKey] = useState<{key: string; name: string} | null>(null);
 
   // Fetch API keys
   const { data: apiKeys = [], isLoading } = useQuery({
@@ -39,7 +41,7 @@ export default function ApiKeys() {
   // Create API key mutation
   const createMutation = useMutation({
     mutationFn: (data: any) => api.createApiKey(data),
-    onSuccess: () => {
+    onSuccess: (response: any) => {
       queryClient.invalidateQueries({ queryKey: ['api-keys'] });
       setShowCreateModal(false);
       setNewKeyName('');
@@ -47,7 +49,11 @@ export default function ApiKeys() {
       setNewKeyExpiresAt(null);
       setNewKeyIpWhitelist([]);
       setNewKeyUsageAlerts([]);
-      alert('API key created successfully! Make sure to copy it now.');
+      
+      // Show the newly created key in a modal
+      if (response.key) {
+        setNewlyCreatedKey({ key: response.key, name: response.name });
+      }
     },
     onError: (error: any) => {
       alert(`Error creating API key: ${error.message}`);
@@ -83,12 +89,19 @@ export default function ApiKeys() {
   };
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert('API key copied to clipboard!');
+    if (!text || text.includes('••••') || text.includes('****')) {
+      alert('Full API key is not available. Keys can only be copied once during creation.');
+      return;
+    }
+    navigator.clipboard.writeText(text).then(() => {
+      alert('API key copied to clipboard!');
+    }).catch(() => {
+      alert('Failed to copy to clipboard');
+    });
   };
 
-  const maskKey = (key: string) => {
-    if (key.length <= 12) return '••••••••••••••••';
+  const maskKey = (key: string | undefined) => {
+    if (!key || key.length <= 12) return '••••••••••••••••';
     return key.substring(0, 8) + '••••••••••••••••' + key.substring(key.length - 4);
   };
 
@@ -100,16 +113,16 @@ export default function ApiKeys() {
 
     const data: any = { name: newKeyName };
     if (newKeyRateLimit) {
-      data.rate_limit_per_minute = parseInt(newKeyRateLimit);
+      data.rateLimit = parseInt(newKeyRateLimit);
     }
     if (newKeyExpiresAt) {
-      data.expires_at = newKeyExpiresAt;
+      data.expiresInDays = Math.ceil((new Date(newKeyExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
     }
     if (newKeyIpWhitelist.length > 0) {
-      data.ip_whitelist = newKeyIpWhitelist;
+      data.ipWhitelist = newKeyIpWhitelist;
     }
     if (newKeyUsageAlerts.length > 0) {
-      data.usage_alerts = newKeyUsageAlerts;
+      data.usageAlerts = newKeyUsageAlerts;
     }
 
     createMutation.mutate(data);
@@ -138,8 +151,8 @@ export default function ApiKeys() {
     );
   }
 
-  const activeKeys = apiKeys.filter((k: ApiKey) => k.is_active);
-  const totalRequests = apiKeys.reduce((sum: number, k: ApiKey) => sum + (k.usage_count || 0), 0);
+  const activeKeys = apiKeys.filter((k: ApiKey) => k.isActive);
+  const totalRequests = apiKeys.reduce((sum: number, k: ApiKey) => sum + (k.usageCount || 0), 0);
 
   return (
     <div className="p-6 space-y-6">
@@ -216,52 +229,52 @@ export default function ApiKeys() {
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-semibold text-gray-900">{apiKey.name}</h3>
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      apiKey.is_active 
+                      apiKey.isActive 
                         ? 'bg-green-100 text-green-800' 
                         : 'bg-red-100 text-red-800'
                     }`}>
-                      {apiKey.is_active ? 'active' : 'revoked'}
+                      {apiKey.isActive ? 'active' : 'revoked'}
                     </span>
                   </div>
                   <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
                     <div className="flex items-center gap-1">
                       <Calendar className="w-4 h-4" />
-                      Created: {new Date(apiKey.created_at).toLocaleDateString()}
+                      Created: {new Date(apiKey.createdAt).toLocaleDateString()}
                     </div>
                     <div className="flex items-center gap-1">
                       <Activity className="w-4 h-4" />
-                      Last used: {apiKey.last_used_at 
-                        ? new Date(apiKey.last_used_at).toLocaleString() 
+                      Last used: {apiKey.lastUsed 
+                        ? new Date(apiKey.lastUsed).toLocaleString() 
                         : 'Never'}
                     </div>
                     <div>
-                      Requests: {(apiKey.usage_count || 0).toLocaleString()}
+                      Requests: {(apiKey.usageCount || 0).toLocaleString()}
                     </div>
-                    {apiKey.rate_limit_per_minute && (
+                    {apiKey.rateLimit && (
                       <div>
-                        Rate limit: {apiKey.rate_limit_per_minute}/min
+                        Rate limit: {apiKey.rateLimit}/min
                       </div>
                     )}
-                    {apiKey.expires_at && (
+                    {apiKey.expiresAt && (
                       <div className={`flex items-center gap-1 px-2 py-1 rounded ${
-                        new Date(apiKey.expires_at) < new Date() 
+                        new Date(apiKey.expiresAt) < new Date() 
                           ? 'bg-red-100 text-red-800'
-                          : new Date(apiKey.expires_at).getTime() - new Date().getTime() < 7 * 24 * 60 * 60 * 1000
+                          : new Date(apiKey.expiresAt).getTime() - new Date().getTime() < 7 * 24 * 60 * 60 * 1000
                           ? 'bg-yellow-100 text-yellow-800'
                           : 'bg-green-100 text-green-800'
                       }`}>
                         <Calendar className="w-4 h-4" />
-                        Expires: {new Date(apiKey.expires_at).toLocaleDateString()}
+                        Expires: {new Date(apiKey.expiresAt).toLocaleDateString()}
                       </div>
                     )}
-                    {apiKey.ip_whitelist && apiKey.ip_whitelist.length > 0 && (
+                    {apiKey.ipWhitelist && apiKey.ipWhitelist.length > 0 && (
                       <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
-                        🔒 {apiKey.ip_whitelist.length} IP(s) whitelisted
+                        🔒 {apiKey.ipWhitelist.length} IP(s) whitelisted
                       </div>
                     )}
-                    {apiKey.usage_alerts && apiKey.usage_alerts.length > 0 && (
+                    {apiKey.usageAlerts && apiKey.usageAlerts.length > 0 && (
                       <div className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">
-                        🔔 {apiKey.usage_alerts.length} alert(s) configured
+                        🔔 {apiKey.usageAlerts.length} alert(s) configured
                       </div>
                     )}
                   </div>
@@ -270,23 +283,46 @@ export default function ApiKeys() {
 
               <div className="flex items-center gap-2">
                 <div className="flex-1 bg-gray-50 px-4 py-3 rounded-lg border border-gray-200 font-mono text-sm">
-                  {showKeys[apiKey.id] ? apiKey.key_value : maskKey(apiKey.key_value)}
+                  {apiKey.key ? (
+                    // Full key available (newly created)
+                    showKeys[apiKey.id] ? apiKey.key : maskKey(apiKey.key)
+                  ) : (
+                    // Only masked version available (existing key)
+                    apiKey.keyDisplay || '••••••••••••••••'
+                  )}
                 </div>
+                {apiKey.key ? (
+                  // Show/hide toggle only for keys with full value
+                  <button
+                    onClick={() => toggleKeyVisibility(apiKey.id)}
+                    className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    title={showKeys[apiKey.id] ? 'Hide key' : 'Show key'}
+                  >
+                    {showKeys[apiKey.id] ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                ) : (
+                  // Disabled button for existing keys
+                  <button
+                    className="p-3 border border-gray-200 rounded-lg bg-gray-100 cursor-not-allowed opacity-50"
+                    title="Full key not available (only shown once during creation)"
+                    disabled
+                  >
+                    <Eye className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
                 <button
-                  onClick={() => toggleKeyVisibility(apiKey.id)}
-                  className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  title={showKeys[apiKey.id] ? 'Hide key' : 'Show key'}
+                  onClick={() => copyToClipboard(apiKey.key || apiKey.keyDisplay || '')}
+                  className={`p-3 border rounded-lg ${
+                    apiKey.key 
+                      ? 'border-gray-300 hover:bg-gray-50' 
+                      : 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
+                  }`}
+                  title={apiKey.key ? 'Copy to clipboard' : 'Full key not available'}
+                  disabled={!apiKey.key}
                 >
-                  {showKeys[apiKey.id] ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  <Copy className={`w-5 h-5 ${apiKey.key ? '' : 'text-gray-400'}`} />
                 </button>
-                <button
-                  onClick={() => copyToClipboard(apiKey.key_value)}
-                  className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  title="Copy to clipboard"
-                >
-                  <Copy className="w-5 h-5" />
-                </button>
-                {apiKey.is_active && (
+                {apiKey.isActive && (
                   <>
                     <button
                       onClick={() => rotateKey(apiKey.id)}
@@ -398,6 +434,71 @@ export default function ApiKeys() {
                   {createMutation.isPending ? 'Creating...' : 'Create Key'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Newly Created Key Modal */}
+      {newlyCreatedKey && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <Key className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">API Key Created Successfully!</h2>
+                <p className="text-sm text-gray-600">Make sure to copy your API key now. You won't be able to see it again!</p>
+              </div>
+            </div>
+
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-yellow-800">
+                  <strong>Important:</strong> This is the only time you'll see the full API key. 
+                  Copy it now and store it securely. If you lose it, you'll need to create a new key.
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Key Name</label>
+                <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
+                  {newlyCreatedKey.name}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-gray-50 px-4 py-3 rounded-lg border border-gray-200 font-mono text-sm break-all">
+                    {newlyCreatedKey.key}
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(newlyCreatedKey.key).then(() => {
+                        alert('API key copied to clipboard!');
+                      });
+                    }}
+                    className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    title="Copy to clipboard"
+                  >
+                    <Copy className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setNewlyCreatedKey(null)}
+                className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+              >
+                I've Saved My Key
+              </button>
             </div>
           </div>
         </div>

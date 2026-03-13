@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import { useRealTimeMetrics } from '../hooks/useWebSocket'
+import ActivityFeed from '../components/ActivityFeed'
 
 export default function Dashboard() {
   const [autoRefresh, setAutoRefresh] = useState<number | null>(null)
@@ -257,6 +258,7 @@ export default function Dashboard() {
         padding: '1.5rem',
         borderRadius: '0.75rem',
         border: '1px solid #334155',
+        marginBottom: '2rem',
       }}>
         <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>
           Security Detections (24h)
@@ -283,6 +285,19 @@ export default function Dashboard() {
             <p style={{ color: '#94a3b8' }}>No security events detected</p>
           </div>
         )}
+      </div>
+
+      {/* Recent Activity */}
+      <div style={{
+        background: '#1e293b',
+        padding: '1.5rem',
+        borderRadius: '0.75rem',
+        border: '1px solid #334155',
+      }}>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>
+          Recent Activity
+        </h2>
+        <ActivityFeed limit={10} />
       </div>
     </div>
   )

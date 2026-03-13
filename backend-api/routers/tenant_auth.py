@@ -74,7 +74,9 @@ def verify_tenant_jwt_token(token: str) -> dict:
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.JWTError:
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
@@ -189,3 +191,87 @@ async def tenant_logout(current_user: dict = Depends(get_current_tenant_user)):
     Tenant logout endpoint (client should discard token)
     """
     return {"message": "Logged out successfully"}
+
+
+@router.post("/signup", response_model=TenantLoginResponse)
+async def tenant_signup(request: TenantSignupRequest, db: Session = Depends(get_db)):
+    """
+    Tenant user signup endpoint
+    """
+    # Validate passwords match
+    if request.password != request.confirmPassword:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match"
+        )
+    
+    # Check if email already exists
+    from sqlalchemy import Column, String, Boolean, DateTime
+    from sqlalchemy.dialects.postgresql import UUID as PGUUID
+    from models.base import Base
+    import uuid
+    
+    # Define User model inline (legacy table)
+    class User(Base):
+        __tablename__ = "users"
+        __table_args__ = {'extend_existing': True}
+        
+        id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+        email = Column(String)
+        password_hash = Column(String)
+        first_name = Column(String)
+        last_name = Column(String)
+        is_active = Column(Boolean, default=True)
+        created_at = Column(DateTime, default=datetime.utcnow)
+    
+    existing_user = db.query(User).filter(User.email == request.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Create new user
+    new_user = User(
+        id=uuid.uuid4(),
+        email=request.email,
+        password_hash=hash_password(request.password),
+        first_name=request.firstName,
+        last_name=request.lastName,
+        is_active=True,
+        created_at=datetime.utcnow()
+    )
+    
+    db.add(new_user)
+    db.flush()  # Get the user ID
+    
+    # Create tenant for this user
+    new_tenant = Tenant(
+        id=uuid.uuid4(),
+        name=request.companyName,
+        owner_id=new_user.id,
+        status="active",
+        subscription_tier="free",
+        is_active=True,
+        created_at=datetime.utcnow()
+    )
+    
+    db.add(new_tenant)
+    db.commit()
+    db.refresh(new_user)
+    db.refresh(new_tenant)
+    
+    # Create JWT token
+    token = create_tenant_jwt_token(str(new_user.id), new_user.email, str(new_tenant.id))
+    
+    return {
+        "token": token,
+        "user": {
+            "id": str(new_user.id),
+            "email": new_user.email,
+            "firstName": new_user.first_name,
+            "lastName": new_user.last_name,
+            "tenantId": str(new_tenant.id),
+            "tenantName": new_tenant.name
+        }
+    }

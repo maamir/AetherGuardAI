@@ -3,7 +3,6 @@ Policy Configuration Model
 """
 
 from sqlalchemy import Column, String, Boolean, Integer, DateTime, JSON, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
 from .base import Base
@@ -12,8 +11,8 @@ from .base import Base
 class PolicyConfig(Base):
     __tablename__ = "policy_configs"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Policy identification
     category = Column(String(50), nullable=False, index=True)  # security, ethical, privacy, integrity, governance
@@ -31,8 +30,8 @@ class PolicyConfig(Base):
     
     def to_dict(self):
         return {
-            "id": str(self.id),
-            "tenantId": str(self.tenant_id),
+            "id": self.id,
+            "tenantId": self.tenant_id,
             "category": self.category,
             "featureKey": self.feature_key,
             "featureName": self.feature_name,

@@ -29,7 +29,6 @@ EXPOSE 3000
 
 # Set environment variables to handle ES modules and Vite properly
 ENV NODE_ENV=development
-ENV VITE_API_URL=http://localhost:8080
 
 # Health check using curl instead of wget
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

@@ -6,6 +6,7 @@
  */
 
 use anyhow::Result;
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -14,7 +15,7 @@ use tracing::{info, warn, debug};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use sha2::{Sha256, Digest};
-use axum::http::{HeaderMap, HeaderValue};
+use axum::http::HeaderMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestAttribution {
@@ -81,6 +82,7 @@ pub struct RequestStep {
     pub security_events: Vec<String>,
 }
 
+#[allow(dead_code)]
 pub struct RequestAttributionEngine {
     attributions: Arc<RwLock<HashMap<String, RequestAttribution>>>,
     correlations: Arc<RwLock<HashMap<String, RequestCorrelation>>>,
@@ -88,13 +90,17 @@ pub struct RequestAttributionEngine {
     secret_key: String,
 }
 
+#[allow(dead_code)]
 impl RequestAttributionEngine {
     pub fn new(secret_key: Option<String>) -> Self {
         Self {
             attributions: Arc::new(RwLock::new(HashMap::new())),
             correlations: Arc::new(RwLock::new(HashMap::new())),
             fingerprint_cache: Arc::new(RwLock::new(HashMap::new())),
-            secret_key: secret_key.unwrap_or_else(|| "aetherguard-attribution-key".to_string()),
+            secret_key: secret_key.unwrap_or_else(|| {
+                std::env::var("ATTRIBUTION_SECRET_KEY")
+                    .unwrap_or_else(|_| "aetherguard-attribution-key".to_string())
+            }),
         }
     }
 
@@ -240,7 +246,7 @@ impl RequestAttributionEngine {
         
         // Hash payload (first 1KB for performance)
         let payload_sample = if body.len() > 1024 { &body[..1024] } else { body };
-        let payload_hash = self.hash_with_secret(&base64::encode(payload_sample));
+        let payload_hash = self.hash_with_secret(&BASE64.encode(payload_sample));
         
         // Generate session fingerprint from multiple factors
         let session_data = format!(
@@ -328,7 +334,7 @@ impl RequestAttributionEngine {
     async fn find_or_create_correlation(
         &self,
         fingerprint: &RequestFingerprint,
-        metadata: &RequestMetadata,
+        _metadata: &RequestMetadata,
     ) -> Result<String> {
         let correlations = self.correlations.read().await;
         

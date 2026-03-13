@@ -26,7 +26,7 @@ const { AetherGuardClient } = require('@aetherguard/nodejs-sdk');
 // Initialize the client
 const client = new AetherGuardClient({
   apiKey: 'your-aetherguard-api-key',
-  baseUrl: 'https://api.aetherguard.ai' // Optional: defaults to localhost:8080
+  baseUrl: process.env.AETHERGUARD_BASE_URL || 'https://api.aetherguard.ai'
 });
 
 // Make a secure chat completion
@@ -60,7 +60,7 @@ example();
 ```javascript
 const client = new AetherGuardClient({
   apiKey: 'your-api-key',           // Required: Your AetherGuard API key
-  baseUrl: 'https://api.aetherguard.ai', // Optional: API endpoint
+  baseUrl: process.env.AETHERGUARD_BASE_URL || 'https://api.aetherguard.ai', // Optional: API endpoint
   timeout: 30000,                   // Optional: Request timeout in ms (default: 30000)
   retries: 3,                       // Optional: Max retry attempts (default: 3)
   debug: false                      // Optional: Enable debug logging (default: false)

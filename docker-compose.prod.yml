@@ -53,6 +53,10 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001,http://localhost:5173}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-admin123}
+      DEFAULT_OPENAI_MODEL: ${DEFAULT_OPENAI_MODEL:-gpt-3.5-turbo}
+      DEFAULT_ANTHROPIC_MODEL: ${DEFAULT_ANTHROPIC_MODEL:-claude-3-sonnet-20240229}
     ports:
       - "8081:8081"
     depends_on:
@@ -64,7 +68,7 @@ services:
       - aetherguard-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8081/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -81,7 +85,50 @@ services:
       - aetherguard-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Rust Proxy Engine with Production AetherSign
+  proxy-engine:
+    build:
+      context: ./proxy-engine
+      dockerfile: Dockerfile
+    container_name: aetherguard-proxy
+    environment:
+      # Core Configuration
+      ML_SERVICE_URL: http://ml-services:8001
+      BACKEND_API_URL: http://backend-api:8081
+      RUST_LOG: ${RUST_LOG:-info}
+      ATTRIBUTION_SECRET_KEY: ${ATTRIBUTION_SECRET_KEY}
+      
+      # Production AetherSign Configuration
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_KMS_KEY_ID: ${AWS_KMS_KEY_ID}
+      QLDB_LEDGER_NAME: ${QLDB_LEDGER_NAME:-aetherguard-provenance}
+      AETHERSIGN_ALGORITHM: ${AETHERSIGN_ALGORITHM:-RsaPkcs1v15Sha256}
+      AETHERSIGN_CACHE_SIZE: ${AETHERSIGN_CACHE_SIZE:-10000}
+      AETHERSIGN_CACHE_TTL: ${AETHERSIGN_CACHE_TTL:-3600}
+      AETHERSIGN_KEY_ROTATION_DAYS: ${AETHERSIGN_KEY_ROTATION_DAYS:-90}
+      NITRO_ENCLAVE_ENABLED: ${NITRO_ENCLAVE_ENABLED:-false}
+      
+      # LLM Provider Configuration
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LLM_PROVIDER_URL: ${LLM_PROVIDER_URL}
+    ports:
+      - "8080:8080"
+    depends_on:
+      ml-services:
+        condition: service_healthy
+      backend-api:
+        condition: service_healthy
+    networks:
+      - aetherguard-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3

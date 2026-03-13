@@ -3,7 +3,6 @@ Admin User Model
 """
 
 from sqlalchemy import Column, String, Boolean, DateTime, JSON
-from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
 from .base import Base
@@ -12,7 +11,7 @@ from .base import Base
 class AdminUser(Base):
     __tablename__ = "admin_users"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     first_name = Column(String(100))
@@ -26,7 +25,7 @@ class AdminUser(Base):
     
     def to_dict(self):
         return {
-            "id": str(self.id),
+            "id": self.id,
             "email": self.email,
             "firstName": self.first_name,
             "lastName": self.last_name,

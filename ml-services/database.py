@@ -1,6 +1,6 @@
 """
 Real Database Integration for AetherGuard AI
-Replaces in-memory storage with PostgreSQL using SQLAlchemy
+Async PostgreSQL integration for ML Services to log security events
 """
 
 import logging
@@ -10,10 +10,12 @@ from datetime import datetime, timedelta
 from sqlalchemy import create_engine, Column, String, DateTime, Integer, Float, Boolean, Text, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 import uuid
 import bcrypt
 import json
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +132,7 @@ class DatabaseManager:
         """Initialize database connection"""
         self.database_url = database_url or os.getenv(
             'DATABASE_URL', 
-            'postgresql://aetherguard:password@localhost/aetherguard'
+            'postgresql://aetherguard:password@postgres:5432/aetherguard'
         )
         
         self.engine = None

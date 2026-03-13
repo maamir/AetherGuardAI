@@ -3,11 +3,12 @@ LLM Providers Router
 Tenant-facing LLM provider management
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+import os
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import httpx
 
 from models.base import get_db
@@ -247,7 +248,7 @@ async def test_llm_provider(
                         "content-type": "application/json"
                     },
                     json={
-                        "model": provider.model_name or "claude-3-sonnet-20240229",
+                        "model": provider.model_name or os.getenv("DEFAULT_ANTHROPIC_MODEL", "claude-3-sonnet-20240229"),
                         "max_tokens": 10,
                         "messages": [{"role": "user", "content": "test"}]
                     },
@@ -261,7 +262,7 @@ async def test_llm_provider(
                     f"{provider.provider_url}/v1/chat/completions",
                     headers={"Authorization": f"Bearer {api_key}"},
                     json={
-                        "model": provider.model_name or "gpt-3.5-turbo",
+                        "model": provider.model_name or os.getenv("DEFAULT_OPENAI_MODEL", "gpt-3.5-turbo"),
                         "messages": [{"role": "user", "content": "test"}],
                         "max_tokens": 10
                     },
@@ -285,3 +286,59 @@ async def test_llm_provider(
         db.commit()
         
         raise HTTPException(status_code=400, detail=f"Connection failed: {str(e)}")
+
+
+@router.get("/{provider_id}/stats")
+async def get_provider_stats(
+    provider_id: str,
+    days: int = Query(7, ge=1, le=90),
+    current_user: dict = Depends(get_current_tenant_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get usage statistics for a specific LLM provider
+    """
+    from models.usage_analytics import UsageAnalytics
+    from sqlalchemy import func
+    from datetime import timedelta
+    
+    # Verify provider ownership
+    provider = db.query(LLMProvider).filter(
+        LLMProvider.id == provider_id,
+        LLMProvider.tenant_id == current_user["tenant_id"]
+    ).first()
+    
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    
+    # Calculate date range
+    start_date = datetime.utcnow().date() - timedelta(days=days)
+    
+    # Query usage statistics
+    stats = db.query(
+        func.count(UsageAnalytics.id).label("total_requests"),
+        func.sum(UsageAnalytics.total_tokens).label("total_tokens"),
+        func.sum(UsageAnalytics.cost_usd).label("total_cost"),
+        func.avg(UsageAnalytics.avg_latency_ms).label("avg_latency"),
+        func.sum(UsageAnalytics.failed_requests).label("failed_requests")
+    ).filter(
+        UsageAnalytics.tenant_id == current_user["tenant_id"],
+        UsageAnalytics.provider_id == provider_id,
+        UsageAnalytics.date >= start_date
+    ).first()
+    
+    # Calculate error rate
+    total_reqs = stats.total_requests or 0
+    failed_reqs = stats.failed_requests or 0
+    error_rate = (failed_reqs / total_reqs) if total_reqs > 0 else 0.0
+    
+    return {
+        "provider_id": provider_id,
+        "provider_name": provider.provider_name,
+        "total_requests": total_reqs,
+        "total_tokens": stats.total_tokens or 0,
+        "total_cost": float(stats.total_cost or 0),
+        "avg_latency": int(stats.avg_latency or 0),
+        "error_rate": round(error_rate, 4),
+        "period_days": days
+    }

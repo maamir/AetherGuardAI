@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
+use tracing::{info, warn, debug};
 use chrono::{DateTime, Utc};
 use reqwest::Client;
 use std::net::IpAddr;
@@ -123,6 +123,7 @@ pub enum EnforcementAction {
     Escalated,
 }
 
+#[allow(dead_code)]
 pub struct DataResidencyEnforcer {
     policies: Arc<RwLock<HashMap<String, DataResidencyPolicy>>>,
     violations: Arc<RwLock<HashMap<String, ResidencyViolation>>>,
@@ -132,6 +133,7 @@ pub struct DataResidencyEnforcer {
     default_policy: DataResidencyPolicy,
 }
 
+#[allow(dead_code)]
 impl DataResidencyEnforcer {
     pub fn new(geolocation_api_key: Option<String>) -> Self {
         let default_policy = DataResidencyPolicy {
@@ -185,15 +187,15 @@ impl DataResidencyEnforcer {
                     tenant_id,
                     &policy,
                     &geolocation,
-                    violation_type,
+                    violation_type.clone(),
                 ).await?;
                 
                 Ok(EnforcementResult {
                     allowed: matches!(enforcement_action, EnforcementAction::Allowed | EnforcementAction::Warned),
                     policy_id: policy.policy_id.clone(),
                     detected_region: geolocation.country_code.clone(),
-                    violation_type: Some(violation_type),
-                    enforcement_action,
+                    violation_type: Some(violation_type.clone()),
+                    enforcement_action: enforcement_action.clone(),
                     geolocation: geolocation.clone(),
                     message: self.get_enforcement_message(&enforcement_action, &violation_type),
                 })

@@ -12,32 +12,41 @@
  */
 
 use anyhow::{anyhow, Result};
+#[cfg(feature = "aws-production")]
 use aws_config::BehaviorVersion;
+#[cfg(feature = "aws-production")]
 use aws_sdk_kms::{Client as KmsClient, types::SigningAlgorithmSpec, primitives::Blob};
+#[cfg(feature = "aws-production")]
 use aws_sdk_qldb::{Client as QldbClient};
+#[cfg(feature = "aws-production")]
 use aws_sdk_qldbsession::{Client as QldbSessionClient};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use dashmap::DashMap;
 use lru::LruCache;
 use parking_lot::RwLock;
 use p256::ecdsa::{SigningKey as EcdsaSigningKey, VerifyingKey as EcdsaVerifyingKey, Signature as EcdsaSignature};
+use p256::ecdsa::signature::{Signer as EcdsaSigner, Verifier as EcdsaVerifier};
 use p256::elliptic_curve::rand_core::OsRng;
-use ring::{digest, hmac, rand::SystemRandom};
+use ring::{digest, hmac};
 use rsa::{RsaPrivateKey, RsaPublicKey, Pkcs1v15Sign, sha2::Sha256};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256 as Sha256Hasher};
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
+use std::ops::AddAssign;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH, Duration};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 /// Production AetherSign with AWS KMS and real cryptography
 #[derive(Clone)]
 pub struct AetherSign {
+    #[cfg(feature = "aws-production")]
     kms_client: Option<KmsClient>,
+    #[cfg(feature = "aws-production")]
     qldb_client: Option<QldbClient>,
+    #[cfg(feature = "aws-production")]
     qldb_session_client: Option<QldbSessionClient>,
     
     // Key management
@@ -80,6 +89,7 @@ pub enum SignatureAlgorithm {
 struct CachedSignature {
     signature: String,
     timestamp: SystemTime,
+    #[allow(dead_code)]
     algorithm: SignatureAlgorithm,
 }
 
@@ -88,6 +98,7 @@ struct CachedSignature {
 pub struct PublicKeyRegistry {
     keys: HashMap<String, PublicKeyEntry>,
     active_key_id: Option<String>,
+    #[allow(dead_code)]
     rotation_schedule: HashMap<String, SystemTime>,
 }
 
@@ -117,18 +128,26 @@ pub struct SigningMetrics {
     pub total_signatures: parking_lot::RwLock<u64>,
     pub cache_hits: parking_lot::RwLock<u64>,
     pub cache_misses: parking_lot::RwLock<u64>,
+    #[allow(dead_code)]
     pub aws_kms_calls: parking_lot::RwLock<u64>,
     pub local_signatures: parking_lot::RwLock<u64>,
     pub average_latency_ms: parking_lot::RwLock<f64>,
+    #[allow(dead_code)]
     pub error_count: parking_lot::RwLock<u64>,
 }
 
 impl Default for AetherSignConfig {
     fn default() -> Self {
+        // Only enable AWS KMS if the key ID is set and not empty
+        let kms_key_id = std::env::var("AWS_KMS_KEY_ID").ok();
+        let use_aws_kms = kms_key_id.as_ref()
+            .map(|k| !k.is_empty())
+            .unwrap_or(false);
+        
         Self {
-            use_aws_kms: std::env::var("AWS_KMS_KEY_ID").is_ok(),
+            use_aws_kms,
             use_nitro_enclave: std::env::var("NITRO_ENCLAVE_ENABLED").is_ok(),
-            kms_key_id: std::env::var("AWS_KMS_KEY_ID").ok(),
+            kms_key_id,
             qldb_ledger_name: std::env::var("QLDB_LEDGER_NAME")
                 .unwrap_or_else(|_| "aetherguard-provenance".to_string()),
             signature_algorithm: SignatureAlgorithm::RsaPkcs1v15Sha256,
@@ -149,8 +168,11 @@ impl AetherSign {
     /// Create AetherSign with custom configuration
     pub async fn with_config(config: AetherSignConfig) -> Result<Self> {
         let mut instance = Self {
+            #[cfg(feature = "aws-production")]
             kms_client: None,
+            #[cfg(feature = "aws-production")]
             qldb_client: None,
+            #[cfg(feature = "aws-production")]
             qldb_session_client: None,
             key_registry: Arc::new(RwLock::new(PublicKeyRegistry::default())),
             signing_cache: Arc::new(RwLock::new(
@@ -163,8 +185,23 @@ impl AetherSign {
         };
         
         // Initialize AWS clients if enabled
-        if config.use_aws_kms {
-            instance.init_aws_clients().await?;
+        #[cfg(feature = "aws-production")]
+        if config.use_aws_kms && std::env::var("AWS_ACCESS_KEY_ID").is_ok() {
+            match instance.init_aws_clients().await {
+                Ok(_) => {
+                    info!("AWS KMS initialized for cryptographic signing");
+                }
+                Err(e) => {
+                    warn!("AWS KMS initialization failed: {}. Falling back to local keys.", e);
+                    instance.config.use_aws_kms = false;
+                }
+            }
+        } else {
+            #[cfg(feature = "aws-production")]
+            if config.use_aws_kms {
+                warn!("AWS credentials not found. Using local keys instead of KMS.");
+                instance.config.use_aws_kms = false;
+            }
         }
         
         // Initialize local keys for development/fallback
@@ -178,6 +215,7 @@ impl AetherSign {
     }
     
     /// Initialize AWS KMS and QLDB clients
+    #[cfg(feature = "aws-production")]
     async fn init_aws_clients(&mut self) -> Result<()> {
         let aws_config = aws_config::defaults(BehaviorVersion::latest())
             .load()
@@ -265,10 +303,17 @@ impl AetherSign {
         self.metrics.cache_misses.write().add_assign(1);
         
         // Sign with appropriate method
-        let signature = if self.config.use_aws_kms && self.kms_client.is_some() {
-            self.sign_with_aws_kms(model_hash, "MODEL_CHECKPOINT").await?
-        } else {
-            self.sign_with_local_key(model_hash).await?
+        let signature = {
+            #[cfg(feature = "aws-production")]
+            if self.config.use_aws_kms && self.kms_client.is_some() {
+                self.sign_with_aws_kms(model_hash, "MODEL_CHECKPOINT").await?
+            } else {
+                self.sign_with_local_key(model_hash).await?
+            }
+            #[cfg(not(feature = "aws-production"))]
+            {
+                self.sign_with_local_key(model_hash).await?
+            }
         };
         
         // Cache the signature
@@ -302,7 +347,11 @@ impl AetherSign {
         }
         
         // Check cache
-        let cache_key = format!("inference:{}", digest::digest(&digest::SHA256, payload.as_bytes()));
+        let digest_result = digest::digest(&digest::SHA256, payload.as_bytes());
+        let digest_hex = digest_result.as_ref().iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>();
+        let cache_key = format!("inference:{}", digest_hex);
         if let Some(cached) = self.get_cached_signature(&cache_key) {
             self.metrics.cache_hits.write().add_assign(1);
             return Ok(cached.signature);
@@ -311,10 +360,17 @@ impl AetherSign {
         self.metrics.cache_misses.write().add_assign(1);
         
         // Sign the payload
-        let signature = if self.config.use_aws_kms && self.kms_client.is_some() {
-            self.sign_with_aws_kms(&payload, "INFERENCE_OUTPUT").await?
-        } else {
-            self.sign_with_local_key(&payload).await?
+        let signature = {
+            #[cfg(feature = "aws-production")]
+            if self.config.use_aws_kms && self.kms_client.is_some() {
+                self.sign_with_aws_kms(&payload, "INFERENCE_OUTPUT").await?
+            } else {
+                self.sign_with_local_key(&payload).await?
+            }
+            #[cfg(not(feature = "aws-production"))]
+            {
+                self.sign_with_local_key(&payload).await?
+            }
         };
         
         // Format final signature with metadata
@@ -334,6 +390,7 @@ impl AetherSign {
     }
     
     /// Sign with AWS KMS (production)
+    #[cfg(feature = "aws-production")]
     async fn sign_with_aws_kms(&self, data: &str, context: &str) -> Result<String> {
         let kms_client = self.kms_client.as_ref()
             .ok_or_else(|| anyhow!("KMS client not initialized"))?;
@@ -351,11 +408,11 @@ impl AetherSign {
         let result = kms_client
             .sign()
             .key_id(key_id)
-            .message(Blob::new(hash.as_slice()))
+            .message(Blob::new(&hash[..]))
             .message_type(aws_sdk_kms::types::MessageType::Digest)
             .signing_algorithm(match self.config.signature_algorithm {
                 SignatureAlgorithm::RsaPkcs1v15Sha256 => SigningAlgorithmSpec::RsassaPkcs1V15Sha256,
-                SignatureAlgorithm::EcdsaP256Sha256 => SigningAlgorithmSpec::EcdsaP256,
+                SignatureAlgorithm::EcdsaP256Sha256 => SigningAlgorithmSpec::EcdsaSha256,
                 _ => SigningAlgorithmSpec::RsassaPkcs1V15Sha256,
             })
             .send()
@@ -394,7 +451,7 @@ impl AetherSign {
                 let signature: EcdsaSignature = ecdsa_key.sign(data.as_bytes());
                 
                 self.metrics.local_signatures.write().add_assign(1);
-                Ok(BASE64.encode(signature.to_bytes().as_slice()))
+                Ok(BASE64.encode(&signature.to_bytes()[..]))
             }
             SignatureAlgorithm::HmacSha256 => {
                 // Fallback HMAC signing
@@ -408,6 +465,7 @@ impl AetherSign {
         }
     }
     /// Verify signature with public key registry
+    #[allow(dead_code)]
     pub async fn verify_signature(
         &self,
         signature: &str,
@@ -503,6 +561,7 @@ impl AetherSign {
     }
     
     /// Cross-model signature verification
+    #[allow(dead_code)]
     pub async fn verify_cross_model_signature(
         &self,
         signature: &str,
@@ -515,6 +574,7 @@ impl AetherSign {
     }
     
     /// Generate cross-model signature for model relationships
+    #[allow(dead_code)]
     pub async fn sign_model_relationship(
         &self,
         model_a_hash: &str,
@@ -523,50 +583,66 @@ impl AetherSign {
     ) -> Result<String> {
         let payload = format!("{}:{}:{}", model_a_hash, model_b_hash, relationship_type);
         
+        #[cfg(feature = "aws-production")]
         if self.config.use_aws_kms && self.kms_client.is_some() {
-            self.sign_with_aws_kms(&payload, "MODEL_RELATIONSHIP").await
-        } else {
-            self.sign_with_local_key(&payload).await
+            return self.sign_with_aws_kms(&payload, "MODEL_RELATIONSHIP").await;
         }
+        self.sign_with_local_key(&payload).await
     }
     /// Key rotation management
+    #[allow(dead_code)]
     pub async fn rotate_keys(&mut self) -> Result<()> {
         info!("Starting key rotation process");
         
-        let mut registry = self.key_registry.write();
         let now = SystemTime::now();
+        let needs_rotation = {
+            let registry = self.key_registry.read();
+            if let Some(active_key_id) = &registry.active_key_id {
+                if let Some(key_entry) = registry.keys.get(active_key_id) {
+                    let key_age = now.duration_since(key_entry.created_at)
+                        .unwrap_or(Duration::from_secs(0));
+                    key_age.as_secs() > (self.config.key_rotation_days * 24 * 3600)
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        };
         
-        // Check if current active key needs rotation
-        if let Some(active_key_id) = &registry.active_key_id {
-            if let Some(key_entry) = registry.keys.get_mut(active_key_id) {
-                let key_age = now.duration_since(key_entry.created_at)
-                    .unwrap_or(Duration::from_secs(0));
-                
-                if key_age.as_secs() > (self.config.key_rotation_days * 24 * 3600) {
-                    // Mark current key as rotating
-                    key_entry.status = KeyStatus::Rotating;
-                    
-                    // Generate new key
-                    if self.config.use_aws_kms {
-                        self.create_new_kms_key().await?;
-                    } else {
-                        self.create_new_local_key().await?;
+        if needs_rotation {
+            // Generate new key
+            if self.config.use_aws_kms {
+                self.create_new_kms_key().await?;
+            } else {
+                self.create_new_local_key().await?;
+            }
+            
+            // Mark old key as rotating
+            {
+                let mut registry = self.key_registry.write();
+                if let Some(active_key_id) = &registry.active_key_id.clone() {
+                    if let Some(key_entry) = registry.keys.get_mut(active_key_id) {
+                        key_entry.status = KeyStatus::Rotating;
+                        info!("Key rotation completed for key: {}", active_key_id);
                     }
-                    
-                    info!("Key rotation completed for key: {}", active_key_id);
                 }
             }
         }
         
         // Clean up old deprecated keys
-        registry.keys.retain(|_, entry| {
-            matches!(entry.status, KeyStatus::Active | KeyStatus::Rotating)
-        });
+        {
+            let mut registry = self.key_registry.write();
+            registry.keys.retain(|_, entry| {
+                matches!(entry.status, KeyStatus::Active | KeyStatus::Rotating)
+            });
+        }
         
         Ok(())
     }
     
     /// Create new KMS key for rotation
+    #[allow(dead_code)]
     async fn create_new_kms_key(&self) -> Result<()> {
         // In production, this would create a new KMS key
         // For now, we'll simulate by updating the registry
@@ -575,6 +651,7 @@ impl AetherSign {
     }
     
     /// Create new local key for rotation
+    #[allow(dead_code)]
     async fn create_new_local_key(&mut self) -> Result<()> {
         // Generate new local keys
         let mut rng = OsRng;
@@ -589,24 +666,27 @@ impl AetherSign {
                 
                 let key_id = format!("local-rsa-{}", Uuid::new_v4());
                 
-                let mut registry = self.key_registry.write();
-                registry.keys.insert(key_id.clone(), PublicKeyEntry {
-                    key_id: key_id.clone(),
-                    public_key_pem,
-                    algorithm: SignatureAlgorithm::RsaPkcs1v15Sha256,
-                    created_at: SystemTime::now(),
-                    expires_at: None,
-                    status: KeyStatus::Active,
-                    usage_count: 0,
-                });
-                
-                // Update active key
-                if let Some(old_key_id) = &registry.active_key_id {
-                    if let Some(old_key) = registry.keys.get_mut(old_key_id) {
-                        old_key.status = KeyStatus::Deprecated;
+                {
+                    let mut registry = self.key_registry.write();
+                    registry.keys.insert(key_id.clone(), PublicKeyEntry {
+                        key_id: key_id.clone(),
+                        public_key_pem,
+                        algorithm: SignatureAlgorithm::RsaPkcs1v15Sha256,
+                        created_at: SystemTime::now(),
+                        expires_at: None,
+                        status: KeyStatus::Active,
+                        usage_count: 0,
+                    });
+                    
+                    // Update active key
+                    let old_key_id = registry.active_key_id.clone();
+                    if let Some(old_id) = old_key_id {
+                        if let Some(old_key) = registry.keys.get_mut(&old_id) {
+                            old_key.status = KeyStatus::Deprecated;
+                        }
                     }
+                    registry.active_key_id = Some(key_id);
                 }
-                registry.active_key_id = Some(key_id);
                 
                 self.local_rsa_key = Some(new_rsa_key);
             }
@@ -638,6 +718,7 @@ impl AetherSign {
     }
     
     /// Get public key registry for external verification
+    #[allow(dead_code)]
     pub fn get_public_key_registry(&self) -> PublicKeyRegistry {
         self.key_registry.read().clone()
     }
@@ -651,6 +732,7 @@ impl AetherSign {
     }
     
     /// Get signing metrics
+    #[allow(dead_code)]
     pub fn get_metrics(&self) -> SigningMetrics {
         SigningMetrics {
             total_signatures: parking_lot::RwLock::new(*self.metrics.total_signatures.read()),
@@ -739,15 +821,26 @@ impl AetherSign {
     }
     
     /// Batch sign multiple items for high-throughput scenarios
+    #[allow(dead_code)]
     pub async fn batch_sign(&self, items: Vec<(&str, &str)>) -> Result<Vec<String>> {
         let mut signatures = Vec::with_capacity(items.len());
         
         // Process in parallel for better performance
         let futures: Vec<_> = items.into_iter().map(|(data, context)| {
-            if self.config.use_aws_kms && self.kms_client.is_some() {
-                self.sign_with_aws_kms(data, context)
-            } else {
-                self.sign_with_local_key(data)
+            #[cfg(feature = "aws-production")]
+            {
+                let use_kms = self.config.use_aws_kms && self.kms_client.is_some();
+                async move {
+                    if use_kms {
+                        self.sign_with_aws_kms(data, context).await
+                    } else {
+                        self.sign_with_local_key(data).await
+                    }
+                }
+            }
+            #[cfg(not(feature = "aws-production"))]
+            {
+                async move { self.sign_with_local_key(data).await }
             }
         }).collect();
         
@@ -761,8 +854,11 @@ impl AetherSign {
 /// Production Chain of Custody with AWS QLDB
 #[derive(Clone)]
 pub struct ProvenanceTracker {
+    #[cfg(feature = "aws-production")]
     qldb_client: Option<QldbClient>,
+    #[cfg(feature = "aws-production")]
     qldb_session_client: Option<QldbSessionClient>,
+    #[allow(dead_code)]
     ledger_name: String,
     
     // Local cache for development/performance
@@ -772,7 +868,9 @@ pub struct ProvenanceTracker {
     signer: Arc<AetherSign>,
     
     // Performance optimization
+    #[allow(dead_code)]
     batch_size: usize,
+    #[allow(dead_code)]
     batch_buffer: Arc<RwLock<Vec<ProvenanceEvent>>>,
 }
 
@@ -811,7 +909,9 @@ impl ProvenanceTracker {
             .unwrap_or_else(|_| "aetherguard-provenance".to_string());
         
         let mut tracker = Self {
+            #[cfg(feature = "aws-production")]
             qldb_client: None,
+            #[cfg(feature = "aws-production")]
             qldb_session_client: None,
             ledger_name: ledger_name.clone(),
             event_cache: Arc::new(RwLock::new(DashMap::new())),
@@ -821,15 +921,35 @@ impl ProvenanceTracker {
         };
         
         // Initialize QLDB clients if available
-        if std::env::var("AWS_REGION").is_ok() {
-            tracker.init_qldb_clients().await?;
-            tracker.ensure_ledger_exists().await?;
+        #[cfg(feature = "aws-production")]
+        if std::env::var("AWS_REGION").is_ok() && std::env::var("AWS_ACCESS_KEY_ID").is_ok() {
+            match tracker.init_qldb_clients().await {
+                Ok(_) => {
+                    match tracker.ensure_ledger_exists().await {
+                        Ok(_) => {
+                            info!("QLDB provenance tracking enabled");
+                        }
+                        Err(e) => {
+                            warn!("QLDB ledger initialization failed: {}. Continuing without QLDB.", e);
+                            tracker.qldb_client = None;
+                            tracker.qldb_session_client = None;
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("QLDB client initialization failed: {}. Continuing without QLDB.", e);
+                }
+            }
+        } else {
+            #[cfg(feature = "aws-production")]
+            info!("AWS credentials not found. QLDB provenance tracking disabled.");
         }
         
         Ok(tracker)
     }
     
     /// Initialize QLDB clients
+    #[cfg(feature = "aws-production")]
     async fn init_qldb_clients(&mut self) -> Result<()> {
         let aws_config = aws_config::defaults(BehaviorVersion::latest())
             .load()
@@ -843,6 +963,7 @@ impl ProvenanceTracker {
     }
     
     /// Ensure QLDB ledger exists
+    #[cfg(feature = "aws-production")]
     async fn ensure_ledger_exists(&self) -> Result<()> {
         if let Some(ref client) = self.qldb_client {
             // Check if ledger exists
@@ -878,23 +999,24 @@ impl ProvenanceTracker {
     }
     
     /// Create QLDB tables for provenance tracking
+    #[cfg(feature = "aws-production")]
     async fn create_provenance_tables(&self) -> Result<()> {
-        if let Some(ref session_client) = self.qldb_session_client {
+        if let Some(ref _session_client) = self.qldb_session_client {
             // Create session
-            let session_result = session_client
+            let _session_result = _session_client
                 .send_command()
                 .session_token("") // Will be set by SDK
                 .start_session(
                     aws_sdk_qldbsession::types::StartSessionRequest::builder()
                         .ledger_name(&self.ledger_name)
-                        .build()
+                        .build()?
                 )
                 .send()
                 .await
                 .map_err(|e| anyhow!("Failed to start QLDB session: {}", e))?;
             
             // Create provenance_events table
-            let create_table_sql = r#"
+            let _create_table_sql = r#"
                 CREATE TABLE provenance_events (
                     event_id STRING,
                     event_type STRING,
@@ -968,9 +1090,16 @@ impl ProvenanceTracker {
         };
 
         // Store in QLDB (production) or cache (development)
+        #[cfg(feature = "aws-production")]
         if self.qldb_client.is_some() {
             self.write_event_to_qldb(&event).await?;
-        } else {
+        }
+        #[cfg(not(feature = "aws-production"))]
+        {
+            self.event_cache.write().insert(event_id.clone(), event.clone());
+        }
+        #[cfg(feature = "aws-production")]
+        if self.qldb_client.is_none() {
             self.event_cache.write().insert(event_id.clone(), event.clone());
         }
 
@@ -983,10 +1112,11 @@ impl ProvenanceTracker {
     }
     
     /// Write event to QLDB with ACID transaction
+    #[cfg(feature = "aws-production")]
     async fn write_event_to_qldb(&self, event: &ProvenanceEvent) -> Result<()> {
-        if let Some(ref session_client) = self.qldb_session_client {
+        if let Some(ref _session_client) = self.qldb_session_client {
             // Create PartiQL INSERT statement
-            let insert_sql = r#"
+            let _insert_sql = r#"
                 INSERT INTO provenance_events VALUE {
                     'event_id': ?,
                     'event_type': ?,
@@ -1011,21 +1141,22 @@ impl ProvenanceTracker {
     
     /// Get latest event hash for chaining
     async fn get_latest_event_hash(&self, model_id: &str) -> Option<String> {
+        #[cfg(feature = "aws-production")]
         if self.qldb_client.is_some() {
             // Query QLDB for latest event
-            self.query_latest_event_from_qldb(model_id).await
-        } else {
-            // Query local cache
-            let cache = self.event_cache.read();
-            cache.iter()
-                .filter(|(_, event)| event.model_id == model_id)
-                .max_by_key(|(_, event)| event.timestamp)
-                .map(|(_, event)| event.event_hash.clone())
+            return self.query_latest_event_from_qldb(model_id).await;
         }
+        // Query local cache
+        let cache = self.event_cache.read();
+        cache.iter()
+            .filter(|entry| entry.value().model_id == model_id)
+            .max_by_key(|entry| entry.value().timestamp)
+            .map(|entry| entry.value().event_hash.clone())
     }
     
     /// Query latest event from QLDB
-    async fn query_latest_event_from_qldb(&self, model_id: &str) -> Option<String> {
+    #[cfg(feature = "aws-production")]
+    async fn query_latest_event_from_qldb(&self, _model_id: &str) -> Option<String> {
         if let Some(ref _session_client) = self.qldb_session_client {
             // PartiQL query for latest event
             let _query_sql = r#"
@@ -1043,11 +1174,19 @@ impl ProvenanceTracker {
     }
     
     /// Verify complete chain of custody with QLDB queries
+    #[allow(dead_code)]
     pub async fn verify_chain_of_custody(&self, model_id: &str) -> Result<ChainVerification> {
-        let events = if self.qldb_client.is_some() {
-            self.query_model_events_from_qldb(model_id).await?
-        } else {
-            self.get_model_events_from_cache(model_id).await
+        let events = {
+            #[cfg(feature = "aws-production")]
+            if self.qldb_client.is_some() {
+                self.query_model_events_from_qldb(model_id).await?
+            } else {
+                self.get_model_events_from_cache(model_id).await
+            }
+            #[cfg(not(feature = "aws-production"))]
+            {
+                self.get_model_events_from_cache(model_id).await
+            }
         };
 
         if events.is_empty() {
@@ -1105,28 +1244,36 @@ impl ProvenanceTracker {
         }
 
         let valid = broken_links.is_empty() && invalid_signatures.is_empty() && invalid_watermarks.is_empty();
+        
+        let _message = if valid {
+            "Chain of custody verified with cryptographic integrity".to_string()
+        } else {
+            format!(
+                "Chain verification failed: {} broken links, {} invalid signatures, {} invalid watermarks",
+                broken_links.len(),
+                invalid_signatures.len(),
+                invalid_watermarks.len()
+            )
+        };
 
         Ok(ChainVerification {
             valid,
             total_events: events.len(),
             verified_events,
-            broken_links,
-            invalid_signatures,
-            invalid_watermarks,
-            message: if valid {
-                "Chain of custody verified with cryptographic integrity".to_string()
-            } else {
-                format!(
-                    "Chain verification failed: {} broken links, {} invalid signatures, {} invalid watermarks",
-                    broken_links.len(),
-                    invalid_signatures.len(),
-                    invalid_watermarks.len()
-                )
-            },
+            broken_links: broken_links.clone(),
+            invalid_signatures: invalid_signatures.clone(),
+            invalid_watermarks: invalid_watermarks.clone(),
+            message: format!(
+                "Chain verification failed: {} broken links, {} invalid signatures, {} invalid watermarks",
+                broken_links.len(),
+                invalid_signatures.len(),
+                invalid_watermarks.len()
+            ),
         })
     }
     /// Query model events from QLDB
-    async fn query_model_events_from_qldb(&self, model_id: &str) -> Result<Vec<ProvenanceEvent>> {
+    #[cfg(feature = "aws-production")]
+    async fn query_model_events_from_qldb(&self, _model_id: &str) -> Result<Vec<ProvenanceEvent>> {
         if let Some(ref _session_client) = self.qldb_session_client {
             // PartiQL query for all model events
             let _query_sql = r#"
@@ -1143,11 +1290,12 @@ impl ProvenanceTracker {
     }
     
     /// Get model events from local cache
+    #[allow(dead_code)]
     async fn get_model_events_from_cache(&self, model_id: &str) -> Vec<ProvenanceEvent> {
         let cache = self.event_cache.read();
         let mut events: Vec<ProvenanceEvent> = cache.iter()
-            .filter(|(_, event)| event.model_id == model_id)
-            .map(|(_, event)| event.clone())
+            .filter(|entry| entry.value().model_id == model_id)
+            .map(|entry| entry.value().clone())
             .collect();
         
         events.sort_by_key(|event| event.timestamp);
@@ -1155,7 +1303,9 @@ impl ProvenanceTracker {
     }
     
     /// Advanced PartiQL queries for complex provenance analysis
+    #[allow(dead_code)]
     pub async fn query_cross_model_relationships(&self, model_id: &str) -> Result<Vec<ProvenanceEvent>> {
+        #[cfg(feature = "aws-production")]
         if let Some(ref _session_client) = self.qldb_session_client {
             // Complex PartiQL query for cross-model relationships
             let _query_sql = r#"
@@ -1170,17 +1320,20 @@ impl ProvenanceTracker {
         // Fallback to cache query
         let cache = self.event_cache.read();
         let events: Vec<ProvenanceEvent> = cache.iter()
-            .filter(|(_, event)| {
+            .filter(|entry| {
+                let event = entry.value();
                 event.model_id == model_id || event.cross_model_refs.contains(&model_id.to_string())
             })
-            .map(|(_, event)| event.clone())
+            .map(|entry| entry.value().clone())
             .collect();
         
         Ok(events)
     }
     
     /// Query events by watermark signature
+    #[allow(dead_code)]
     pub async fn query_by_watermark(&self, watermark_signature: &str) -> Result<Vec<ProvenanceEvent>> {
+        #[cfg(feature = "aws-production")]
         if let Some(ref _session_client) = self.qldb_session_client {
             let _query_sql = r#"
                 SELECT * FROM provenance_events 
@@ -1192,16 +1345,17 @@ impl ProvenanceTracker {
         // Fallback to cache
         let cache = self.event_cache.read();
         let events: Vec<ProvenanceEvent> = cache.iter()
-            .filter(|(_, event)| {
-                event.watermark_signature.as_ref() == Some(watermark_signature)
+            .filter(|entry| {
+                entry.value().watermark_signature.as_ref() == Some(&watermark_signature.to_string())
             })
-            .map(|(_, event)| event.clone())
+            .map(|entry| entry.value().clone())
             .collect();
         
         Ok(events)
     }
     
     /// Batch write events for high-throughput scenarios
+    #[allow(dead_code)]
     pub async fn batch_record_events(&self, events: Vec<(EventType, String, serde_json::Value)>) -> Result<Vec<ProvenanceEvent>> {
         let mut recorded_events = Vec::with_capacity(events.len());
         
@@ -1211,6 +1365,7 @@ impl ProvenanceTracker {
         }
         
         // In production, use QLDB batch operations for better performance
+        #[cfg(feature = "aws-production")]
         if self.qldb_client.is_some() {
             self.flush_batch_to_qldb(&recorded_events).await?;
         }
@@ -1219,6 +1374,7 @@ impl ProvenanceTracker {
     }
     
     /// Flush batch of events to QLDB
+    #[cfg(feature = "aws-production")]
     async fn flush_batch_to_qldb(&self, events: &[ProvenanceEvent]) -> Result<()> {
         if let Some(ref _session_client) = self.qldb_session_client {
             // Use QLDB batch operations for better performance
@@ -1229,11 +1385,19 @@ impl ProvenanceTracker {
     }
     
     /// Export provenance data for compliance reporting
+    #[allow(dead_code)]
     pub async fn export_compliance_report(&self, model_id: &str, format: &str) -> Result<String> {
-        let events = if self.qldb_client.is_some() {
-            self.query_model_events_from_qldb(model_id).await?
-        } else {
-            self.get_model_events_from_cache(model_id).await
+        let events = {
+            #[cfg(feature = "aws-production")]
+            if self.qldb_client.is_some() {
+                self.query_model_events_from_qldb(model_id).await?
+            } else {
+                self.get_model_events_from_cache(model_id).await
+            }
+            #[cfg(not(feature = "aws-production"))]
+            {
+                self.get_model_events_from_cache(model_id).await
+            }
         };
         
         let verification = self.verify_chain_of_custody(model_id).await?;

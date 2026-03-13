@@ -34,6 +34,7 @@ pub struct QLDBProof {
 }
 
 /// AWS QLDB Client for immutable audit logging
+#[allow(dead_code)]
 pub struct QLDBClient {
     ledger_name: String,
     region: String,
@@ -42,6 +43,7 @@ pub struct QLDBClient {
     mock_storage: HashMap<String, Vec<QLDBRevision>>,
 }
 
+#[allow(dead_code)]
 impl QLDBClient {
     /// Create a new QLDB client
     pub fn new(ledger_name: String, region: String) -> Self {
@@ -292,10 +294,12 @@ impl QLDBClient {
 }
 
 /// Chain of Custody integration with QLDB
+#[allow(dead_code)]
 pub struct ChainOfCustodyQLDB {
     client: QLDBClient,
 }
 
+#[allow(dead_code)]
 impl ChainOfCustodyQLDB {
     pub fn new(ledger_name: String, region: String) -> Self {
         Self {

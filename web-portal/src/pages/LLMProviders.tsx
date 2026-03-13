@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Edit, Trash2, TestTube, CheckCircle, XCircle, Server } from 'lucide-react';
 import { api } from '../services/api';
+import ProviderStats from '../components/ProviderStats';
 
 interface LLMProvider {
   id: string;
-  name: string;
-  provider_type: string;
-  api_endpoint: string;
-  model_name: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  providerName: string;
+  providerType: string;
+  providerUrl: string;
+  modelName: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 const PROVIDER_TYPES = [
@@ -29,11 +30,11 @@ export default function LLMProviders() {
   const [showModal, setShowModal] = useState(false);
   const [editingProvider, setEditingProvider] = useState<LLMProvider | null>(null);
   const [formData, setFormData] = useState({
-    name: '',
-    provider_type: 'openai',
-    api_endpoint: '',
-    model_name: '',
-    api_key: '',
+    providerName: '',
+    providerType: 'openai',
+    providerUrl: '',
+    modelName: '',
+    apiKey: '',
   });
 
   // Fetch LLM providers
@@ -91,11 +92,11 @@ export default function LLMProviders() {
   const openCreateModal = () => {
     setEditingProvider(null);
     setFormData({
-      name: '',
-      provider_type: 'openai',
-      api_endpoint: '',
-      model_name: '',
-      api_key: '',
+      providerName: '',
+      providerType: 'openai',
+      providerUrl: '',
+      modelName: '',
+      apiKey: '',
     });
     setShowModal(true);
   };
@@ -103,11 +104,11 @@ export default function LLMProviders() {
   const openEditModal = (provider: LLMProvider) => {
     setEditingProvider(provider);
     setFormData({
-      name: provider.name,
-      provider_type: provider.provider_type,
-      api_endpoint: provider.api_endpoint,
-      model_name: provider.model_name,
-      api_key: '', // Don't pre-fill API key for security
+      providerName: provider.providerName,
+      providerType: provider.providerType,
+      providerUrl: provider.providerUrl,
+      modelName: provider.modelName,
+      apiKey: '', // Don't pre-fill API key for security
     });
     setShowModal(true);
   };
@@ -116,25 +117,25 @@ export default function LLMProviders() {
     setShowModal(false);
     setEditingProvider(null);
     setFormData({
-      name: '',
-      provider_type: 'openai',
-      api_endpoint: '',
-      model_name: '',
-      api_key: '',
+      providerName: '',
+      providerType: 'openai',
+      providerUrl: '',
+      modelName: '',
+      apiKey: '',
     });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.provider_type || !formData.model_name) {
+    if (!formData.providerName || !formData.providerType || !formData.modelName) {
       alert('Please fill in all required fields');
       return;
     }
 
     const submitData = { ...formData };
-    if (!submitData.api_key) {
-      delete submitData.api_key; // Don't send empty API key
+    if (!submitData.apiKey) {
+      delete submitData.apiKey; // Don't send empty API key
     }
 
     if (editingProvider) {
@@ -300,17 +301,17 @@ export default function LLMProviders() {
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
                     <h3 style={{ fontSize: '1.125rem', fontWeight: '600' }}>
-                      {provider.name}
+                      {provider.providerName}
                     </h3>
                     <span style={{
                       padding: '0.25rem 0.5rem',
                       fontSize: '0.75rem',
                       fontWeight: '500',
                       borderRadius: '0.25rem',
-                      background: provider.is_active ? '#10b98120' : '#64748b20',
-                      color: provider.is_active ? '#10b981' : '#64748b',
+                      background: provider.isActive ? '#10b98120' : '#64748b20',
+                      color: provider.isActive ? '#10b981' : '#64748b',
                     }}>
-                      {provider.is_active ? 'Active' : 'Inactive'}
+                      {provider.isActive ? 'Active' : 'Inactive'}
                     </span>
                     <span style={{
                       padding: '0.25rem 0.5rem',
@@ -321,25 +322,25 @@ export default function LLMProviders() {
                       color: '#60a5fa',
                       textTransform: 'capitalize',
                     }}>
-                      {provider.provider_type.replace('_', ' ')}
+                      {provider.providerType.replace('_', ' ')}
                     </span>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
                     <div>
                       <p style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Model</p>
-                      <p style={{ fontSize: '0.875rem', fontWeight: '500' }}>{provider.model_name}</p>
+                      <p style={{ fontSize: '0.875rem', fontWeight: '500' }}>{provider.modelName}</p>
                     </div>
                     <div>
                       <p style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Endpoint</p>
                       <p style={{ fontSize: '0.875rem', fontWeight: '500', fontFamily: 'monospace' }}>
-                        {provider.api_endpoint || 'Default'}
+                        {provider.providerUrl || 'Default'}
                       </p>
                     </div>
                     <div>
                       <p style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Created</p>
                       <p style={{ fontSize: '0.875rem', fontWeight: '500' }}>
-                        {new Date(provider.created_at).toLocaleDateString()}
+                        {new Date(provider.createdAt).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
@@ -379,7 +380,7 @@ export default function LLMProviders() {
                     <Edit size={16} color="white" />
                   </button>
                   <button
-                    onClick={() => deleteProvider(provider.id, provider.name)}
+                    onClick={() => deleteProvider(provider.id, provider.providerName)}
                     disabled={deleteMutation.isPending}
                     style={{
                       padding: '0.5rem',
@@ -441,8 +442,8 @@ export default function LLMProviders() {
                   </label>
                   <input
                     type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    value={formData.providerName}
+                    onChange={(e) => setFormData({ ...formData, providerName: e.target.value })}
                     style={{
                       width: '100%',
                       padding: '0.75rem',
@@ -460,8 +461,8 @@ export default function LLMProviders() {
                     Provider Type *
                   </label>
                   <select
-                    value={formData.provider_type}
-                    onChange={(e) => setFormData({ ...formData, provider_type: e.target.value })}
+                    value={formData.providerType}
+                    onChange={(e) => setFormData({ ...formData, providerType: e.target.value })}
                     style={{
                       width: '100%',
                       padding: '0.75rem',
@@ -485,8 +486,8 @@ export default function LLMProviders() {
                   </label>
                   <input
                     type="text"
-                    value={formData.model_name}
-                    onChange={(e) => setFormData({ ...formData, model_name: e.target.value })}
+                    value={formData.modelName}
+                    onChange={(e) => setFormData({ ...formData, modelName: e.target.value })}
                     style={{
                       width: '100%',
                       padding: '0.75rem',
@@ -505,8 +506,8 @@ export default function LLMProviders() {
                   </label>
                   <input
                     type="url"
-                    value={formData.api_endpoint}
-                    onChange={(e) => setFormData({ ...formData, api_endpoint: e.target.value })}
+                    value={formData.providerUrl}
+                    onChange={(e) => setFormData({ ...formData, providerUrl: e.target.value })}
                     style={{
                       width: '100%',
                       padding: '0.75rem',
@@ -525,8 +526,8 @@ export default function LLMProviders() {
                   </label>
                   <input
                     type="password"
-                    value={formData.api_key}
-                    onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
+                    value={formData.apiKey}
+                    onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
                     style={{
                       width: '100%',
                       padding: '0.75rem',

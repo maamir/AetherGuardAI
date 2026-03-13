@@ -27,7 +27,7 @@ export function formatMessages(messages: string | ChatMessage[]): ChatMessage[] 
  */
 export function createSimpleRequest(
   prompt: string,
-  model: string = 'gpt-3.5-turbo',
+  model: string = process.env.DEFAULT_MODEL || 'gpt-3.5-turbo',
   options: {
     maxTokens?: number;
     temperature?: number;

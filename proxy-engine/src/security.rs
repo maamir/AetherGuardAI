@@ -17,6 +17,7 @@ pub struct SecurityCheckResult {
 struct DoSCheckResponse {
     allowed: bool,
     reason: String,
+    #[allow(dead_code)]
     complexity_score: f32,
 }
 
@@ -41,7 +42,7 @@ impl SecurityEngine {
         }
     }
 
-    /// Stage 3: Input scanning - PII, injection, malicious intent, DoS, adversarial, secrets
+    /// Stage 3: Input scanning - PII, injection, malicious intent, DoS, adversarial, secrets, bias
     pub async fn scan_input(&self, req: &mut CompletionRequest) -> Result<()> {
         // Extract prompt content
         let prompt_content = req
@@ -72,6 +73,26 @@ impl SecurityEngine {
             anyhow::bail!("Harmful content detected in prompt (score: {:.2})", toxicity_score);
         }
 
+        // Bias check on input prompt
+        match self.check_bias(&normalized_content).await {
+            Ok(bias_score) => {
+                // Always log bias score for visibility
+                tracing::info!("Input bias detection score: {:.2}", bias_score);
+                
+                if bias_score > 0.7 {
+                    // High bias detected - block the request
+                    anyhow::bail!("High bias detected in input (score: {:.2}). Please rephrase your request to be more inclusive and unbiased.", bias_score);
+                } else if bias_score > 0.4 {
+                    tracing::warn!("Moderate bias detected in input (score: {:.2})", bias_score);
+                } else {
+                    tracing::debug!("Low bias score in input (score: {:.2})", bias_score);
+                }
+            }
+            Err(e) => {
+                warn!("Bias detection failed on input: {}", e);
+            }
+        }
+
         // PII detection and redaction
         self.redact_pii(req).await?;
 
@@ -86,6 +107,25 @@ impl SecurityEngine {
         let toxicity_score = self.check_toxicity(content).await?;
         if toxicity_score > 0.8 {
             anyhow::bail!("Toxic content detected (score: {:.2})", toxicity_score);
+        }
+
+        // Bias check
+        match self.check_bias(content).await {
+            Ok(bias_score) => {
+                // Always log bias score for visibility
+                tracing::info!("Bias detection score: {:.2}", bias_score);
+                
+                if bias_score > 0.7 {
+                    warn!("High bias detected in output (score: {:.2})", bias_score);
+                } else if bias_score > 0.4 {
+                    tracing::info!("Moderate bias detected in output (score: {:.2})", bias_score);
+                } else {
+                    tracing::debug!("Low bias score in output (score: {:.2})", bias_score);
+                }
+            }
+            Err(e) => {
+                warn!("Bias detection failed: {}", e);
+            }
         }
 
         Ok(())
@@ -139,12 +179,64 @@ impl SecurityEngine {
     }
 
     async fn redact_pii(&self, req: &mut CompletionRequest) -> Result<()> {
-        // TODO: Call Presidio service for PII detection/redaction
-        // For now, basic pattern matching
+        // Call ML service for PII detection and redaction
         for message in &mut req.messages {
-            message.content = self.simple_pii_redact(&message.content);
+            match self.call_ml_pii_detector(&message.content).await {
+                Ok(result) => {
+                    // Check if PII was detected
+                    if let Some(entities) = result.get("entities").and_then(|e| e.as_array()) {
+                        if !entities.is_empty() {
+                            // Log detected PII types
+                            let pii_types: Vec<String> = entities
+                                .iter()
+                                .filter_map(|e| e.get("type").and_then(|t| t.as_str()).map(|s| s.to_string()))
+                                .collect();
+                            
+                            tracing::warn!(
+                                "PII detected in message: {} types found: {:?}",
+                                entities.len(),
+                                pii_types
+                            );
+                            
+                            // Get redacted text
+                            if let Some(redacted) = result.get("redacted_text").and_then(|r| r.as_str()) {
+                                message.content = redacted.to_string();
+                                tracing::info!("PII redacted in message");
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("PII detection service unavailable ({}), using simple redaction", e);
+                    // Fallback to simple email redaction
+                    message.content = self.simple_pii_redact(&message.content);
+                }
+            }
         }
         Ok(())
+    }
+    
+    async fn call_ml_pii_detector(&self, text: &str) -> Result<serde_json::Value> {
+        let url = format!("{}/detect/pii", self.ml_service_url);
+        let payload = serde_json::json!({
+            "text": text
+        });
+
+        let response = self.http_client
+            .post(&url)
+            .json(&payload)
+            .send()
+            .await
+            .context("Failed to call PII detection service")?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("PII detection service returned error: {}", response.status());
+        }
+
+        let result: serde_json::Value = response.json().await
+            .context("Failed to parse PII detection response")?;
+
+        Ok(result)
     }
 
     fn simple_pii_redact(&self, text: &str) -> String {
@@ -296,5 +388,33 @@ impl SecurityEngine {
         }
 
         Ok(())
+    }
+    
+    /// Check for bias in content
+    async fn check_bias(&self, content: &str) -> Result<f32> {
+        let url = format!("{}/detect/bias", self.ml_service_url);
+        
+        let payload = serde_json::json!({
+            "outputs": [content],
+            "metadata": [{}]
+        });
+
+        let response = self.http_client
+            .post(&url)
+            .json(&payload)
+            .send()
+            .await
+            .context("Failed to call bias detection service")?;
+
+        if !response.status().is_success() {
+            tracing::warn!("Bias detection service returned error");
+            return Ok(0.0);
+        }
+
+        let result: serde_json::Value = response.json().await
+            .context("Failed to parse bias detection response")?;
+
+        let bias_score = result["overall_bias_score"].as_f64().unwrap_or(0.0) as f32;
+        Ok(bias_score)
     }
 }

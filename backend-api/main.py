@@ -27,6 +27,7 @@ from routers import (
     api_keys_router,
     provider_health_router,
     reports_router,
+    activities_router,
 )
 
 # Import models for startup initialization
@@ -59,9 +60,10 @@ async def lifespan(app: FastAPI):
         admin_count = db.query(AdminUser).count()
         if admin_count == 0:
             logger.info("Creating default admin user...")
+            default_password = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin123")
             default_admin = AdminUser(
                 email="admin@aetherguard.ai",
-                password_hash=hash_password("admin123"),
+                password_hash=hash_password(default_password),
                 first_name="Admin",
                 last_name="User",
                 role="super_admin",
@@ -69,7 +71,7 @@ async def lifespan(app: FastAPI):
             )
             db.add(default_admin)
             db.commit()
-            logger.info("✅ Default admin created: admin@aetherguard.ai / admin123")
+            logger.info(f"✅ Default admin created: admin@aetherguard.ai / {default_password}")
     except Exception as e:
         logger.error(f"Failed to create default admin: {e}")
     finally:
@@ -89,9 +91,10 @@ app = FastAPI(
 )
 
 # CORS middleware
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:5173").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -109,6 +112,7 @@ app.include_router(analytics_router)
 app.include_router(api_keys_router)
 app.include_router(provider_health_router)
 app.include_router(reports_router)
+app.include_router(activities_router)
 
 # Health check
 @app.get("/health")
@@ -125,7 +129,8 @@ async def health_check():
             "analytics",
             "api_keys",
             "provider_health",
-            "reports"
+            "reports",
+            "activities"
         ]
     }
 

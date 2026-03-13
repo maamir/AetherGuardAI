@@ -3,7 +3,6 @@ Security Event Model
 """
 
 from sqlalchemy import Column, String, DateTime, JSON, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
 from .base import Base
@@ -12,9 +11,9 @@ from .base import Base
 class SecurityEvent(Base):
     __tablename__ = "security_events"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    api_key_id = Column(UUID(as_uuid=True), ForeignKey("api_keys.id", ondelete="SET NULL"), index=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    api_key_id = Column(String(36), ForeignKey("api_keys.id", ondelete="SET NULL"), index=True)
     
     # Event details
     event_type = Column(String(100), nullable=False, index=True)
@@ -33,9 +32,9 @@ class SecurityEvent(Base):
     
     def to_dict(self):
         return {
-            "id": str(self.id),
-            "tenantId": str(self.tenant_id),
-            "apiKeyId": str(self.api_key_id) if self.api_key_id else None,
+            "id": self.id,
+            "tenantId": self.tenant_id,
+            "apiKeyId": self.api_key_id if self.api_key_id else None,
             "eventType": self.event_type,
             "severity": self.severity,
             "description": self.description,

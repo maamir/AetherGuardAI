@@ -181,7 +181,7 @@ export class AetherGuardComputeStack extends cdk.Stack {
       }),
       environment: {
         RUST_LOG: 'info',
-        ML_SERVICE_URL: 'http://localhost:8001',
+        ML_SERVICE_URL: 'http://ml-service:8001', // Use ECS service discovery
         KMS_KEY_ID: 'placeholder', // Set via environment or secrets manager
       },
       portMappings: [
@@ -191,7 +191,7 @@ export class AetherGuardComputeStack extends cdk.Stack {
         },
       ],
       healthCheck: {
-        command: ['CMD-SHELL', 'curl -f http://localhost:8080/health || exit 1'],
+        command: ['CMD-SHELL', 'curl -f http://127.0.0.1:8080/health || exit 1'],
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(5),
         retries: 3,
@@ -230,7 +230,7 @@ export class AetherGuardComputeStack extends cdk.Stack {
         },
       ],
       healthCheck: {
-        command: ['CMD-SHELL', 'curl -f http://localhost:8001/health || exit 1'],
+        command: ['CMD-SHELL', 'curl -f http://127.0.0.1:8001/health || exit 1'],
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(5),
         retries: 3,

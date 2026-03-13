@@ -8,7 +8,7 @@ async function basicExample() {
   // Initialize the client
   const client = new AetherGuardClient({
     apiKey: 'your-api-key-here',
-    baseUrl: 'http://localhost:8080', // Optional: defaults to localhost:8080
+    baseUrl: process.env.AETHERGUARD_BASE_URL || 'http://localhost:8080',
     debug: true // Optional: enable debug logging
   });
 

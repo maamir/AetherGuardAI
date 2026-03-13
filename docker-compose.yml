@@ -7,14 +7,26 @@ services:
       context: ./backend-api
       dockerfile: Dockerfile
     ports:
-      - "8081:8080"
+      - "8081:8081"
     environment:
-      - JWT_SECRET=<key>
-      - DATABASE_URL=<connectionstring>
+      - JWT_SECRET=${JWT_SECRET:-aetherguard-jwt-secret-change-in-production}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://aetherguard:password@postgres:5432/aetherguard}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-aetherguard-encryption-key-32ch}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001,http://localhost:5173}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin123}
+      - DEFAULT_OPENAI_MODEL=${DEFAULT_OPENAI_MODEL:-gpt-3.5-turbo}
+      - DEFAULT_ANTHROPIC_MODEL=${DEFAULT_ANTHROPIC_MODEL:-claude-3-sonnet-20240229}
+      # SMTP Configuration (optional)
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=
+      - SMTP_PASSWORD=
+      - SMTP_FROM=noreply@aetherguard.ai
+      - SMTP_USE_TLS=true
     depends_on:
       - postgres
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8081/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -29,18 +41,19 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - DATABASE_URL=<connectionstring>
+      - DATABASE_URL=${DATABASE_URL:-postgresql://aetherguard:password@postgres:5432/aetherguard}
+      - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN:-hf_your-huggingface-token-here}
     depends_on:
       - postgres
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
     networks:
       - aetherguard
 
-  # Rust Proxy Engine
+  # Rust Proxy Engine with Production AetherSign
   proxy-engine:
     build: 
       context: ./proxy-engine
@@ -49,12 +62,33 @@ services:
       - "8080:8080"
     environment:
       - ML_SERVICE_URL=http://ml-services:8001
-      - BACKEND_API_URL=http://backend-api:8080
+      - BACKEND_API_URL=http://backend-api:8081
+      - DATABASE_URL=${DATABASE_URL:-postgresql://aetherguard:password@postgres:5432/aetherguard}
+      - RUST_LOG=info
+      - ATTRIBUTION_SECRET_KEY=${ATTRIBUTION_SECRET_KEY:-aetherguard-attribution-key}
+      
+      # AetherSign Production Configuration
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_KMS_KEY_ID=${AWS_KMS_KEY_ID}
+      - QLDB_LEDGER_NAME=${QLDB_LEDGER_NAME:-aetherguard-provenance}
+      - AETHERSIGN_ALGORITHM=${AETHERSIGN_ALGORITHM:-RsaPkcs1v15Sha256}
+      - AETHERSIGN_CACHE_SIZE=${AETHERSIGN_CACHE_SIZE:-10000}
+      - AETHERSIGN_CACHE_TTL=${AETHERSIGN_CACHE_TTL:-3600}
+      - AETHERSIGN_KEY_ROTATION_DAYS=${AETHERSIGN_KEY_ROTATION_DAYS:-90}
+      
+      # AWS Credentials (for local development - use IAM roles in production)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      
+      # LLM Provider Configuration (uncomment and configure one):
+      # - OPENAI_API_KEY=
+      # - ANTHROPIC_API_KEY=sk-ant-your-anthropic-key-here
+      # - LLM_PROVIDER_URL=https://api.openai.com/v1/chat/completions
     depends_on:
       - ml-services
       - backend-api
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -70,6 +104,8 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=development
+      # Note: These URLs are used by the browser (client-side), not the container
+      # So they should point to localhost from the user's perspective
       - VITE_API_URL=http://localhost:8081
       - VITE_ML_API_URL=http://localhost:8001
       - VITE_PROXY_URL=http://localhost:8080
@@ -81,18 +117,36 @@ services:
     networks:
       - aetherguard
 
+  # Admin Portal
+  admin-portal:
+    build: 
+      context: ./admin-portal
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8081}
+    depends_on:
+      - backend-api
+    volumes:
+      - ./admin-portal/src:/app/src
+      - ./admin-portal/public:/app/public
+    networks:
+      - aetherguard
+
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_DB=<>
-      - POSTGRES_USER=<>
-      - POSTGRES_PASSWORD=<>
+      - POSTGRES_DB=${DB_NAME:-aetherguard}
+      - POSTGRES_USER=${DB_USER:-aetherguard}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./backend-api/migrations:/docker-entrypoint-initdb.d
     ports:
-      - "5433:5433"
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U aetherguard"]
       interval: 30s
