@@ -1,11 +1,11 @@
-# AetherGuard AI : Zero-Trust Firewall for the Generative Era
+# AetherGuard AI : Zero-Trust Gateway for the Generative Era
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org/)
 [![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 
-A comprehensive, production-ready AI firewall for securing LLM workflows with real-time semantic inspection, cryptographic accountability, and responsible AI compliance. Built with Rust, Python, and TypeScript for enterprise-scale deployments.
+A comprehensive, production-ready AI gateway for securing LLM workflows with real-time semantic inspection, cryptographic accountability, and responsible AI compliance. Built with Rust, Python, and TypeScript for enterprise-scale deployments.
 
 ## 🎯 Overview
 
